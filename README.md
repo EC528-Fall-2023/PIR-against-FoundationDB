@@ -119,3 +119,6 @@ The design decisions made during the global architecture design have significant
 - Develop and execute a sophisticated attack on the database to assess the system's resistance to access pattern analysis.
 6. Security Analysis
 - Analyze the results of the attack simulation to identify vulnerabilities and potential security improvements.
+
+## 7. Videos
+[Sprint 1](https://drive.google.com/file/d/1mzK61GUkCX3TyAa_z3-Qk02gBIUXeQ1o/view?usp=sharing)
