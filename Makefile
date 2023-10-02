@@ -16,7 +16,7 @@ app: $(OBJ_DIR)/app.o $(OBJ_DIR)/client.o
 	$(CC) $^ $(LDLIBS) -o $@
 
 server: $(OBJ_DIR)/server.o
-	$(CC) $^ $(LDLIBS) -o $@
+	$(CC) $^ /lib64/libfdb_c.so $(LDLIBS) -o $@
 
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c | $(OBJ_DIR)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@

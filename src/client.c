@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include <stdbool.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
@@ -53,7 +54,7 @@ static void send_data(uint8_t op, uint8_t id, const uint8_t *data, uint16_t data
 	memcpy(request+2, &data_length, 2);
 	memcpy(request+4, data, data_length);
 	send(socket_fd, request, 4 + data_length, 0);
-	printf("Client: Hello message sent\n");
+	printf("Client: message sent\n");
 }
 
 uint8_t get(uint8_t const *key_name, int key_name_length)
@@ -66,9 +67,11 @@ uint8_t get(uint8_t const *key_name, int key_name_length)
 
 void put(uint8_t const *key_name, int key_name_length, uint8_t const *value, int value_length)
 {
-	key_name = key_name;
-	key_name_length = key_name_length;
-	send_data(WRITE, 1, value, value_length);
+	uint8_t *data = (uint8_t *) malloc(key_name_length + value_length + 1);
+	memcpy(data, key_name, key_name_length);
+	data[key_name_length] = ',';
+	memcpy(data + key_name_length + 1, value, value_length);
+	send_data(WRITE, 1, data, key_name_length + value_length + 1);
 }
 
 /*
