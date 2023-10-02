@@ -28,7 +28,8 @@ int main(int argc, char **argv)
 		exit(EXIT_FAILURE);
 	}
 
-	send(socket_fd, "hello", sizeof("hello"), 0);
+	send(socket_fd, '\0', sizeof('\0'), 0);
+	//send(socket_fd, "hello", sizeof("hello"), 0);
 	printf("Client: Hello message sent\n");
 
 	return 0;
