@@ -133,3 +133,4 @@ The design decisions made during the global architecture design have significant
 
 ## 7. Videos
 [Sprint 1](https://drive.google.com/file/d/1mzK61GUkCX3TyAa_z3-Qk02gBIUXeQ1o/view?usp=sharing)
+[Sprint 2](https://youtu.be/9lLiGHvvhog)
