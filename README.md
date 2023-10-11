@@ -66,7 +66,7 @@ These principal user roles, Sarah and Alex, encompass specific characteristics a
 8. get() returns the value of the key
 9. The tree is updated after operation
 
-
+#### In-Depth Explanation of each component within PIR:
 Path ORAM Server (Server):
 - The Path ORAM Server is a critical component responsible for implementing the Path ORAM algorithm.
 - It manages a tree structure where data blocks are randomly shuffled across leaf nodes to hide access patterns.
