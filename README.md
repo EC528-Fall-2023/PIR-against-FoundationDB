@@ -56,29 +56,40 @@ These principal user roles, Sarah and Alex, encompass specific characteristics a
 
 #### Walkthrough Explanation of the above Architectural Structure:
 
-1. Path ORAM Server (Server):
+1. Application call get() from library
+2. PathORAM client will get the leaf node from the "position map" data structure, within the client 
+3. The PathORAM client requests the branch from the PathORAM server leading to the desired leaf node 
+4. PathORAM Server will fetch data from FoundationDB on each of the nodes in the branch leading to the leaf
+5. FoundationDB server sends data back to PathORAM server and makes the tree strcuture
+6. Path ORAM server sends a branch back to PathORAM client get() function
+7. PathORAM shuffling Algorithm 
+8. get() returns the value of the key
+9. The tree is updated after operation
+
+
+Path ORAM Server (Server):
 - The Path ORAM Server is a critical component responsible for implementing the Path ORAM algorithm.
 - It manages a tree structure where data blocks are randomly shuffled across leaf nodes to hide access patterns.
 When a client requests data, the Path ORAM Server retrieves the data, shuffles it with dummy blocks, and writes it back to random locations in the tree, not necessarily in the same branch it may shuffle along ajascent branches. The server also updates the position map.
 - This continuous random shuffling ensures that access patterns are obscured, enhancing data privacy.
 
-2. Path ORAM Client (Application):
+Path ORAM Client (Application):
 - The Path ORAM Client is an application or module that interacts with the Path ORAM Server to access and manipulate data.
 - Client applications, such as database clients or other software, use the Path ORAM Client to perform data operations while benefiting from privacy-preserving access.
 - The client will be able to run down the branch with the requested data to the leaf collecting the meta data.
 - It communicates with the Path ORAM Server through the FoundationDB API.
   
-3. FoundationDB Client:
+FoundationDB Client:
 - The FoundationDB Client is a component responsible for interacting with FoundationDB, a distributed database system known for its scalability and reliability.
 - It acts as a bridge between the Path ORAM Client and FoundationDB, facilitating data operations.
 - Client applications make requests to the FoundationDB Client to store, retrieve, or manipulate data.
   
-4. FoundationDB:
+FoundationDB:
 - FoundationDB serves as the core database infrastructure of the system.
 - It stores data in a distributed manner, ensuring data durability, availability, and scalability.
 - The FoundationDB Client communicates with FoundationDB to execute data operations based on requests from the Path ORAM Client and client applications.
   
-5. Distributed Database (DistributedDB):
+Distributed Database (DistributedDB):
 - DistributedDB represents the collective database system, including multiple instances of FoundationDB, distributed across multiple servers or nodes.
 - This distributed architecture enhances the system's fault tolerance and scalability.
 - The Path ORAM Server, Path ORAM Client, and FoundationDB Client interact with the distributed database to provide a cohesive and distributed data storage solution.
