@@ -69,31 +69,6 @@ These principal user roles, Sarah and Alex, encompass specific characteristics a
 
 *node = stores a piece of the private information
 
-#### In-Depth Explanation of each component within PIR:
-Path ORAM Server (Server):
-- The Path ORAM Server is the component responsible for implementing one part of the Path ORAM algorithm.
-- It stores a binary tree structure full of encrypted data where each node (bucket) contains data blocks, which contains an id.
-- It listens for data requests in a tuple: operation type, leaf node id (leftmost id is 1, rightmost is highest), and the actual data (if write operation). 
-- It returns all of the data from all of the nodes between the root and the leaf with the requested id (the tree branch) back to the client.
-- Then it receives the shuffled branch to update the tree.
-- This continuous random shuffling ensures that access patterns are obscured, enhancing data privacy.
-- After each branch update, the Path ORAM server updates the key-value pairs in the FoundationDB server via the C API.
-
-Path ORAM Client (Application):
-- The Path ORAM Client is a library for an application that consists of functions similar to the FoundationDB C API with the tradeoff in increased security for decreased performance.
-- It stores a map that maps the leaf node id to the actual leaf node.
-- It sends the request tuple to the Path ORAM server, retrieves a branch, performs the shuffling, and sends it back to the server.
-  
-FoundationDB:
-- FoundationDB serves as the core database infrastructure of the system.
-- It stores data in a distributed manner, ensuring data durability, availability, and scalability.
-- The Path ORAM server communicates with FoundationDB to execute data operations based on requests from the Path ORAM Client.
-  
-Distributed Database (DistributedDB):
-- DistributedDB represents the collective database system, including multiple instances of FoundationDB, distributed across multiple servers or nodes.
-- This distributed architecture enhances the system's fault tolerance and scalability.
-- The Path ORAM Server, Path ORAM Client, and FoundationDB Client interact with the distributed database to provide a cohesive and distributed data storage solution.
-
 ### Design Implications and Reasons:
 
 The design decisions made during the global architecture design have significant implications for the overall functionality, security, and performance of the system. Here, we discuss the key design decisions and their reasons:
@@ -104,7 +79,7 @@ The design decisions made during the global architecture design have significant
   
 #### FoundationDB as the Core Database:
 - Implication: Using FoundationDB as the core database infrastructure provides scalability and reliability, allowing the system to handle large datasets and high transaction volumes.
-- Reason: FoundationDB is a distributed database known for its robustness and scalability. It ensures data durability and availability, making it a suitable choice for the underlying data storage system.
+- Reason: FoundationDB is a distributed database known for its robustness and scalability. It ensures data durability and availability, making it a suitable choice for the underlying data storage system. It is also a key value data storage.
   
 ## 5. Acceptance criteria
 *Minimum Acceptance criteria:*
