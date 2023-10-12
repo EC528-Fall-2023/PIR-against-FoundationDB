@@ -12,10 +12,10 @@
 - Orran Krieger
 
 ## 1. Vision and Goals Of The Project
-Our vision is to see the Path ORAM algorithm fully implemented in the FoundationDB client layer and the application layer, and to implement an API that transfers data between the two layers. Along the way, we will create attacks against a database to understand why sole data encryption is not enough to protect information leaking out to adversaries, and why PIR is needed for absolute security.
+Our vision is to see the Path ORAM algorithm fully implemented in a client library and a server process between the user application and the FoundationDB server. The entire system should be implemented such that the client exposes a simplified interface of the FoundationDB API to the user, while adversaries cannot infer much information in a compromised database. Along the way, we will create attacks against a database to understand why sole data encryption is not enough to protect information leaking out to adversaries, and why PIR is needed for increased security.
 
 ## 2. Users/Personas Of The Project
-PIR will be used by anyone who is securing their data to the utmost degree. Specifically, enterprises, government agencies, or financial institutions that want to retrieve data while protecting their proprietary queries from malicious third parties or suspicious databases.
+PIR will be used by anyone who is willing to sacrifice some request performance in exchange for increased data security on top of encryption. Specifically, enterprises, government agencies, or financial institutions that want to retrieve data while protecting their proprietary queries from malicious third parties or suspicious databases.
 
 1. Database Administrator - Sarah
 - Role Description: Sarah is a highly skilled Database Administrator responsible for overseeing and maintaining the FoundationDB database system within her organization. She plays a pivotal role in ensuring data integrity, security, and performance.
@@ -39,7 +39,8 @@ These principal user roles, Sarah and Alex, encompass specific characteristics a
 ### Features in Scope:
 
 - Path ORAM Integration: The primary scope of the project is to implement the Path ORAM algorithm as an access method to FoundationDB. This integration will involve both client and server components that act as a front end to FoundationDB.
-- FoundationDB API Implementation: Implement the FoundationDB API to work seamlessly with the Path ORAM front end. Key API operations, including "Put," "Get," "Range Read," and "Clear Range," should be fully implemented and functional.
+- Client Library: The client library functions exposed to the user's application should look similar to FoundationDB's "put", "get", "range\_read", and "range\_clear" C API functions. In the background, the library will have to send and receive data to and from the Path ORAM server, and shuffle it to send it back to the server.
+- Server Process: The Path ORAM server will listen for incoming requests, store all data in the tree structure, and send the data back to the FoundationDB server via the FoundationDB C API.
 - Attack Replication: Replicate a real-world attack that leverages access patterns. This involves simulating an adversarial scenario to analyze and understand the vulnerabilities that might exist within the system when it comes to privacy and access pattern analysis.
 - Overhead Analysis: Measure and analyze the overhead introduced by the use of the Path ORAM algorithm for various operations within the FoundationDB system. Explore potential strategies to mitigate this overhead.
 
@@ -68,26 +69,23 @@ These principal user roles, Sarah and Alex, encompass specific characteristics a
 
 #### In-Depth Explanation of each component within PIR:
 Path ORAM Server (Server):
-- The Path ORAM Server is a critical component responsible for implementing the Path ORAM algorithm.
-- It manages a tree structure where data blocks are randomly shuffled across leaf nodes to hide access patterns.
-When a client requests data, the Path ORAM Server retrieves the data, shuffles it with dummy blocks, and writes it back to random locations in the tree, not necessarily in the same branch it may shuffle along ajascent branches. The server also updates the position map.
+- The Path ORAM Server is the component responsible for implementing one part of the Path ORAM algorithm.
+- It stores a binary tree structure full of encrypted data where each node (bucket) contains data blocks, which contains an id.
+- It listens for data requests in a tuple: operation type, leaf node id (leftmost id is 1, rightmost is highest), and the actual data (if write operation). 
+- It returns all of the data from all of the nodes between the root and the leaf with the requested id (the tree branch) back to the client.
+- Then it receives the shuffled branch to update the tree.
 - This continuous random shuffling ensures that access patterns are obscured, enhancing data privacy.
+- After each branch update, the Path ORAM server updates the key-value pairs in the FoundationDB server via the C API.
 
 Path ORAM Client (Application):
-- The Path ORAM Client is an application or module that interacts with the Path ORAM Server to access and manipulate data.
-- Client applications, such as database clients or other software, use the Path ORAM Client to perform data operations while benefiting from privacy-preserving access.
-- The client will be able to run down the branch with the requested data to the leaf collecting the meta data.
-- It communicates with the Path ORAM Server through the FoundationDB API.
-  
-FoundationDB Client:
-- The FoundationDB Client is a component responsible for interacting with FoundationDB, a distributed database system known for its scalability and reliability.
-- It acts as a bridge between the Path ORAM Client and FoundationDB, facilitating data operations.
-- Client applications make requests to the FoundationDB Client to store, retrieve, or manipulate data.
+- The Path ORAM Client is a library for an application that consists of functions similar to the FoundationDB C API with the tradeoff in increased security for decreased performance.
+- It stores a map that maps the leaf node id to the actual leaf node.
+- It sends the request tuple to the Path ORAM server, retrieves a branch, performs the shuffling, and sends it back to the server.
   
 FoundationDB:
 - FoundationDB serves as the core database infrastructure of the system.
 - It stores data in a distributed manner, ensuring data durability, availability, and scalability.
-- The FoundationDB Client communicates with FoundationDB to execute data operations based on requests from the Path ORAM Client and client applications.
+- The Path ORAM server communicates with FoundationDB to execute data operations based on requests from the Path ORAM Client.
   
 Distributed Database (DistributedDB):
 - DistributedDB represents the collective database system, including multiple instances of FoundationDB, distributed across multiple servers or nodes.
