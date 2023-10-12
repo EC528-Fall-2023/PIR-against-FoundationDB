@@ -56,15 +56,17 @@ These principal user roles, Sarah and Alex, encompass specific characteristics a
 
 #### Walkthrough Explanation of the above Architectural Structure:
 
-1. Application call get() from library
-2. PathORAM client will get the leaf node from the "position map" data structure, within the client 
-3. The PathORAM client requests the branch from the PathORAM server leading to the desired leaf node 
-4. PathORAM Server will fetch data from FoundationDB on each of the nodes in the branch leading to the leaf
-5. FoundationDB server sends data back to PathORAM server and makes the tree strcuture
-6. Path ORAM server sends a branch back to PathORAM client get() function
-7. PathORAM shuffling Algorithm 
-8. get() returns the value of the key
-9. The tree is updated after operation
+1. Application call get() from PathORAM library since the application wants to retrieve a value from the private information retrival (PIR) system. 
+2. PathORAM client gets the PathORAM node* from the position map data structure, within the client. The PathORAM client stores a data structure called a postion map. The position map, maps each key in the PIR system to a PathORAM node. The PathORAM client gets the PathORAM node for the desired key from the position map.
+3. The PathORAM client requests the PathORAM path to the desired PathORAM node from the PathORAM server. The PathORAM path is a sequence of PathORAM nodes that lead to the desired PathORAM node.  
+4. PathORAM Server fetches the data from FoundationDB for each PathORAM node on the path to the desired PathORAM node.
+5. FoundationDB sends the data back to the PathORAM server, which contructs the PathORAM tree. The PathORAM tree us a data structure that represents the relationship between PathORAM nodes
+6. PathORAM server sends the PathORAM path back to the PathORAM client get() function. 
+7. The PathORAM client preforms the PathORAM shuffling algorithm to mix up the PathORAM path. This prevents the PathORAM server from learning which PathORAM node the clients is trying to access. 
+8. get() returns the value of the key. The PathORAM client returns the value of the key to the application. 
+9. The PathORAM client updates the PathORAM tree after the operation to reflect the changes that were made. 
+
+*node = stores a piece of the private information
 
 #### In-Depth Explanation of each component within PIR:
 Path ORAM Server (Server):
