@@ -105,7 +105,18 @@ The design decisions made during the global architecture design have significant
 #### FoundationDB as the Core Database:
 - Implication: Using FoundationDB as the core database infrastructure provides scalability and reliability, allowing the system to handle large datasets and high transaction volumes.
 - Reason: FoundationDB is a distributed database known for its robustness and scalability. It ensures data durability and availability, making it a suitable choice for the underlying data storage system.
-  
+
+#### Network Placement:
+- Implication: Putting a network between the PathORAM client and PathORAM server will improve security by preventing unauthorized access to private data.
+- Reason: A firewall can monitor and control incoming and out going network traffic between the PathaORAM client and PathORAM server. It will also log and monitor the traffic passing to help detect suspecious activity and potential attacks
+
+### Helpful Analogy: 
+Lets say you are reading a top secret book and want to keep that hidden from your friends. You decide to hide that book in the library. To make it really difficult for your friends to find the book your reading, you decide to cut the book into pages and hide each page in a different book throughout the library. 
+
+The pages of the book are analogous to the nodes in PathORAM. The library is analogous to the PathORAM server. The PathORAM client is analogous to you, the user who wants to read the top secret book.
+
+When you want to read the book, you go to the library and request the pages of the book. The PathORAM server does not know which book the pages you requested are in, so it cannot learn which book you are trying to read.
+
 ## 5. Acceptance criteria
 *Minimum Acceptance criteria:*
 - Implementing all parts of a path ORAM, both client and server, to an application and the binded FoundationalDB Client 
