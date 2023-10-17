@@ -1,11 +1,14 @@
 #ifndef PORAM_CLIENT_H
 #define PORAM_CLIENT_H
 
+#include "block.h"
 #include <unistd.h>
 #include <iostream>
 #include <cstring>
 #include <string>
+#include <vector>
 #include <map>
+#include <memory>
 #include <sys/socket.h>
 #include <arpa/inet.h>
 
@@ -20,8 +23,8 @@ public:
 	PathOramClient(const std::string &server_ip = "127.0.0.1", const int port = 8080);
 	~PathOramClient();
 
-	int put(const std::string &key_name, const std::string &value);
-	int get(const std::string &key_name, std::string &value);
+	int put(const std::string &key_name, const std::vector<uint8_t> &value);
+	int get(const std::string &key_name, std::vector<uint8_t> &value);
 	int read_range(const std::string &begin_key_name, const std::string &end_key_name);
 	int clear_range(const std::string &begin_key_name, const std::string &end_key_name);
 
@@ -30,7 +33,7 @@ private:
 	PathOramClient(const std::string &server_ip = "127.0.0.1", const int port = 8080);
 	static PathOramClient *instance;
 */
-	int send_and_receive_request(uint32_t leaf_id, std::string &data_buffer);
+	std::unique_ptr<std::vector<Block>> fetch_data(uint32_t leaf_id);
 
 	int socket_fd;
 	std::map<std::string, uint32_t> position_map;
@@ -43,4 +46,4 @@ enum Operation {
 	CLEAR_RANGE
 };
 
-#endif
+#endif /* PORAM_CLIENT_H */
