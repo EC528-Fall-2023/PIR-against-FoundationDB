@@ -143,5 +143,6 @@ When you want to read the book, you go to the library and request the pages of t
 - Analyze the results of the attack simulation to identify vulnerabilities and potential security improvements.
 
 ## 7. Videos
-[Sprint 1](https://drive.google.com/file/d/1mzK61GUkCX3TyAa_z3-Qk02gBIUXeQ1o/view?usp=sharing)
-[Sprint 2](https://youtu.be/9lLiGHvvhog)
+### [Sprint 1](https://drive.google.com/file/d/1mzK61GUkCX3TyAa_z3-Qk02gBIUXeQ1o/view?usp=sharing)
+In the first sprint we focused on researching and deeply understanding our project as a whole and show a demo regarding writing and reading from the foundationDB
+### [Sprint 2](https://youtu.be/9lLiGHvvhog)
