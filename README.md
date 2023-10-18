@@ -113,7 +113,7 @@ The design decisions made during the global architecture design have significant
 ### Helpful Analogy: 
 Lets say you are reading a top secret book and want to keep that hidden from your friends. You decide to hide that book in the library. To make it really difficult for your friends to find the book your reading, you decide to cut the book into pages and hide each page in a different book throughout the library. 
 
-The pages of the book are analogous to the nodes in PathORAM. The library is analogous to the PathORAM server. The PathORAM client is analogous to you, the user who wants to read the top secret book.
+The pages of the book are analogous to the nodes in PathORAM. The library is analogous to the PathORAM server. The PathORAM client is analogous to you, the user who wants to read the top-secret book.
 
 When you want to read the book, you go to the library and request the pages of the book. The PathORAM server does not know which book the pages you requested are in, so it cannot learn which book you are trying to read.
 
@@ -129,11 +129,15 @@ When you want to read the book, you go to the library and request the pages of t
 
 ## 6. Release Planning
 
-1. Path ORAM Server Implementation
-- Implement the Path ORAM server, which includes the data shuffling mechanism within the tree structure.
-2. Path ORAM Client Integration
-- Develop the Path ORAM client, allowing it to interact with the Path ORAM server and the FoundationDB Client.
-3. FoundationDB Client Integration
+1. Research and Data Storage R/W [09/27/23]
+- Learning the architecture of the project and how the process as a whole works
+- Two core operations, read and write, be shown to execute with the foundationDB
+2. Client & Server Communication and Attack Research[10/11/23]
+- Develop the Path ORAM client, allowing it to interact with the Path ORAM server and the FoundationDB Client. (already here)
+- Change in environments brought us a little behind schedule since we moved from Windows/Mac -> VM/Rocky Linux 9 -> NERC/rocky Linux 8, so the work in downloading and setting our VMs was not put to use
+- Researched a variety of possible attacks that we can replicate
+- Debug the PathORAM we intended to implement 
+3. FoundationDB Client Integration [10/25/23]
 - Integrate the FoundationDB Client into the system, ensuring that it communicates effectively with the Path ORAM Client.
 4. Performance Evaluation
 - Begin evaluating the system's performance, focusing on its efficiency and scalability.
