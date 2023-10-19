@@ -37,6 +37,7 @@ private:
 
 	int socket_fd;
 	std::map<std::string, uint32_t> position_map;
+	std::vector<Block> stash;
 };
 
 enum Operation {
