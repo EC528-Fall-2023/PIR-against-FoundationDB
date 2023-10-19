@@ -4,6 +4,8 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 
+#include <array>
+
 #define PORT 8080
 
 int main(int argc, char **argv)
@@ -42,9 +44,9 @@ int main(int argc, char **argv)
 		exit(EXIT_FAILURE);
 	}
 
-	char buffer[1024] = {0};
-	read(client_socket, buffer, 1024);
-	printf("Server: message received: %s\n", buffer);
+	std::array<char, 8> data;
+	read(client_socket, data.data(), 1024);
+	printf("Server: message received: %c%c%c%c%c%c%c%c\n", data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7]);
 
 	close(client_socket);
 	shutdown(server_socket, SHUT_RDWR);

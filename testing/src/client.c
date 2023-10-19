@@ -3,6 +3,8 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 
+#include <array>
+
 #define PORT 8080
 
 int main(int argc, char **argv)
@@ -28,7 +30,9 @@ int main(int argc, char **argv)
 		exit(EXIT_FAILURE);
 	}
 
-	send(socket_fd, '\0', sizeof('\0'), 0);
+	std::array<char, 8> data = {'h', 'e', 'l', 'l', 'o', ' ', 'w', 'o'};
+
+	send(socket_fd, data.data(), 8, 0);
 	//send(socket_fd, "hello", sizeof("hello"), 0);
 	printf("Client: Hello message sent\n");
 

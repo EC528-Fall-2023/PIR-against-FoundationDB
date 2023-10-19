@@ -1,3 +1,4 @@
+#include "tree.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -18,9 +19,12 @@ enum operation {
 	CLEAR_RANGE
 };
 
-void *run_network()
+void *run_network(void *arg)
 {
-	fdb_run_network();
+	if (fdb_run_network() != 0) {
+		printf("fdb_run_network: failed\n");
+		exit(EXIT_FAILURE);
+	}
 	return NULL;
 }
 
@@ -57,7 +61,10 @@ int main()
 	int client_socket;
 
 	fdb_select_api_version(FDB_API_VERSION);
-	fdb_setup_network();
+	if (fdb_setup_network() != 0) {
+		printf("fdb_setup_network: failed\n");
+		exit(EXIT_FAILURE);
+	}
 	pthread_t network_thread;
 	if (pthread_create(&network_thread, NULL, run_network, NULL) != 0) {
 		printf("pthread_create: failed\n");
@@ -76,36 +83,13 @@ int main()
 			exit(EXIT_FAILURE);
 		}
 
-		long page_size = sysconf(_SC_PAGESIZE);
-		uint8_t *data = (uint8_t *) malloc(page_size);
 		while (1) {
-		// data_request => op (1 byte) + id (1 byte) + data_length (2 bytes) + data (data_length bytes)
-			uint8_t op = 0;
-			uint8_t id = 0;
-			uint16_t data_length = 0;
-			memset(data, 0, page_size);
-			if (read(client_socket, &op, sizeof(uint8_t)) == -1){
-				printf("read: op failed\n");
-				break;
+			std::array<uint8_t, BYTES_PER_BLOCK> data_buffer;
+			data_buffer.fill(0);
+			if (recv(client_socket, data_buffer.data(), BYTES_PER_BLOCK, 0) != BYTES_PER_BLOCK) {
+				printf("recv: failed\n");
+				exit(EXIT_FAILURE);
 			}
-			printf("op: %i\n", op);
-			if (op == 0)
-				break;
-			if (read(client_socket, &id, sizeof(uint8_t)) != sizeof(uint8_t)) {
-				printf("read: id failed\n");
-				break;
-			}
-			printf("id: %i\n", id);
-			if (read(client_socket, &data_length, sizeof(uint16_t)) != sizeof(uint16_t)) {
-				printf("read: data_length failed\n");
-				break;
-			}
-			printf("data_length: %i\n", data_length);
-			if (read(client_socket, data, data_length) != data_length) {
-				printf("read: data failed\n");
-				break;
-			}
-			printf("data: %s\n", data);
 
 			struct FDB_transaction *tr = NULL;
 			if (fdb_database_create_transaction(db, &tr) != 0) {
@@ -114,23 +98,13 @@ int main()
 			}
 
 			struct FDB_future *status = NULL;
-			switch (op) {
-			case READ:
-				break;
-			case WRITE:
-				break;
-			case READ_RANGE:
-				break;
-			case CLEAR_RANGE:
-				break;
-			}
+			// do stuff with status
 
 			if (status != NULL)
 				fdb_future_destroy(status);
 			if (tr != NULL)
 				fdb_transaction_destroy(tr);
 		}
-		free(data);
 	}
 
 	close(client_socket);

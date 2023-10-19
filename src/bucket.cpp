@@ -16,7 +16,7 @@ private:
 Bucket::Bucket()
 {
 	for (int i = 0; i < BLOCKS_PER_BUCKET; ++i) {
-		blocks.push_back(Block(0, i, std::array<uint8_t, BYTES_PER_BLOCK> ()));
+		blocks[i] = Block(0, i, std::array<uint8_t, BYTES_PER_BLOCK> ());
 	}
 }
 

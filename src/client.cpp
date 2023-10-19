@@ -16,6 +16,7 @@ private:
 
 #include "client.h"
 #include "bucket.h"
+#include "block.h"
 
 PathOramClient::PathOramClient(const std::string &server_ip, const int port)
 {
@@ -40,6 +41,7 @@ PathOramClient::PathOramClient(const std::string &server_ip, const int port)
 		//close(socket_fd);
 		exit(EXIT_FAILURE);
 	}
+	std::cout << "client: connection established\n";
 }
 
 PathOramClient::~PathOramClient()
@@ -100,18 +102,24 @@ std::unique_ptr<std::vector<Block>> PathOramClient::fetch_data(uint32_t leaf_id)
 		std::cerr << "send: failed" << std::endl;
 		return nullptr;
 	}
+	std::cout << "client: sent leaf_id\n";
 
 	uint32_t num_buckets;
 	if (recv(socket_fd, &num_buckets, 4, 0) != 4) {
 		std::cerr << "recv: failed" << std::endl;
 		return nullptr;
 	}
+	std::cout << "client: num_buckets = " << num_buckets << '\n';
 
 	std::vector<uint32_t> leaf_ids (num_buckets * BLOCKS_PER_BUCKET, 0);
 	if (recv(socket_fd, leaf_ids.data(), 4 * num_buckets * BLOCKS_PER_BUCKET, 0) != 4 * num_buckets * BLOCKS_PER_BUCKET) {
 		std::cerr << "recv: failed" << std::endl;
 		return nullptr;
 	}
+	std::cout << "client: leaf_ids =";
+	for (uint32_t id : leaf_ids)
+		std::cout << ' ' << id;
+	std::cout << '\n';
 
 	std::unique_ptr<std::vector<Block>> branch (new std::vector<Block> (num_buckets * BLOCKS_PER_BUCKET));
 	std::array<uint8_t, BYTES_PER_BLOCK> data_buffer;
