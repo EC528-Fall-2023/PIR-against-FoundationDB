@@ -33,7 +33,7 @@ private:
 	PathOramClient(const std::string &server_ip = "127.0.0.1", const int port = 8080);
 	static PathOramClient *instance;
 */
-	std::unique_ptr<std::vector<Block>> fetch_data(uint32_t leaf_id);
+	std::unique_ptr<std::vector<Block>> fetch_branch(uint32_t leaf_id);
 
 	int socket_fd;
 	std::map<std::string, uint32_t> position_map;
