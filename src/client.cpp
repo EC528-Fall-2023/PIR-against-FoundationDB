@@ -59,14 +59,19 @@ int PathOramClient::put(const std::string &key_name, const std::vector<uint8_t> 
 int PathOramClient::get(const std::string &key_name, std::vector<uint8_t> &value)
 {
 	std::unique_ptr<std::vector<Block>> branch;
-	if ( (branch = fetch_data(position_map[key_name])) == nullptr ) {
-		std::cerr << "fetch_data: failed" << std::endl;
+	if ( (branch = fetch_branch(position_map[key_name])) == nullptr ) {
+		std::cerr << "fetch_branch: failed" << std::endl;
 		exit(EXIT_FAILURE);
 	}
 
 	// decrypt branch if encrypted
 
 	// perform swaps
+	for (uint32_t i = 0; i < branch->size(); ++i) {
+		if ((*branch)[i].get_leaf_id() == 0)
+			continue;
+		
+	}
 
 	// encrypt branch
 
@@ -85,7 +90,7 @@ int PathOramClient::clear_range(const std::string &begin_key_name, const std::st
 	return 0;
 }
 
-std::unique_ptr<std::vector<Block>> PathOramClient::fetch_data(uint32_t leaf_id)
+std::unique_ptr<std::vector<Block>> PathOramClient::fetch_branch(uint32_t leaf_id)
 {
 	/*
 	BRANCH METADATA:
@@ -102,7 +107,7 @@ std::unique_ptr<std::vector<Block>> PathOramClient::fetch_data(uint32_t leaf_id)
 		std::cerr << "send: failed" << std::endl;
 		return nullptr;
 	}
-	std::cout << "client: sent leaf_id\n";
+	std::cout << "client: sent leaf_id = " << leaf_id << '\n';
 
 	uint32_t num_buckets;
 	if (recv(socket_fd, &num_buckets, 4, 0) != 4) {
