@@ -5,7 +5,7 @@
 - Austin G. Jamias
 - Hitanshi Jain
 - Hugo A. Silmberg
-- Ruben F Carbajal
+- Ruben F. Carbajal
 
 ## Mentor
 - Dan Lambright
