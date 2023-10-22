@@ -17,6 +17,7 @@ private:
 #include "client.h"
 #include "bucket.h"
 #include "block.h"
+using namespace std;
 
 PathOramClient::PathOramClient(const std::string &server_ip, const int port)
 {
