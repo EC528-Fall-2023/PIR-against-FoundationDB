@@ -77,7 +77,7 @@ Path ORAM Server (Server):
 - It listens for data requests in a tuple: operation type, leaf node id (leftmost id is 1, rightmost is highest), and the actual data (if write operation). 
 - It returns all of the data from all of the nodes between the root and the leaf with the requested id (the tree branch) back to the client.
 - Then it receives the shuffled branch to update the tree.
-- This continuous random shuffling ensures that access patterns are obscured, enhancing data privacy.
+- This continuous random shuffling ensures access patterns are obscured, enhancing data privacy.
 - After each branch update, the Path ORAM server updates the key-value pairs in the FoundationDB server via the C API.
 
 Path ORAM Client (Application):
@@ -134,21 +134,32 @@ When you want to read the book, you go to the library and request the pages of t
 - Learning the architecture of the project and how the process as a whole works
 - Two core operations, read and write, be shown to execute with the foundationDB
 2. Client & Server Communication and Attack Research[10/11/23]
-- Develop the Path ORAM client, allowing it to interact with the Path ORAM server and the FoundationDB Client. (already here)
 - Change in environments brought us a little behind schedule since we moved from Windows/Mac -> VM/Rocky Linux 9 -> NERC/rocky Linux 8, so the work in downloading and setting our VMs was not put to use
 - Researched a variety of possible attacks that we can replicate
 - Debug the PathORAM we intended to implement 
-3. FoundationDB Client Integration [10/25/23]
-- Integrate the FoundationDB Client into the system, ensuring that it communicates effectively with the Path ORAM Client.
-4. Performance Evaluation
-- Begin evaluating the system's performance, focusing on its efficiency and scalability.
+3. FoundationDB & PathORAM Integration [10/25/23]
+- Get a working open-source version of PathORAM, both in C++ and Java
+- Implement the PathORAM algorithm with FoundationDB in Java, encouraging a pivot point in our project
+- Decide on the attack we want to pursue: Our simulated attack must be of a compromised database that can witness access patterns of retrieval by PathORAM
+- Set up the types of analysis needed for the future: Overhead and Security
+4. FBD & PathORAM fully functioning & Basic Attack 
+- Evaluate the system's performance, focusing on its efficiency, scalability, security, and fix potential bugs
+- Emulate an attack on our PathORAM to test its effectiveness
+- Research the potential of making a resizable ORAM to decide its feasibility
 5. Sophisticated Attack Simulation
 - Develop and execute a sophisticated attack on the database to assess the system's resistance to access pattern analysis.
-6. Security Analysis
+- Finalize the PathORAM and FDB system 
+6. Security Analysis & Strech Goals
 - Analyze the results of the attack simulation to identify vulnerabilities and potential security improvements.
+- Try to run this on the being able to run PIR against FoundationDB on Massachuttes Open Cloud (MOC)
 
-## 7. Videos
+## 7. Videos & Slides
 ### [Sprint 1](https://drive.google.com/file/d/1mzK61GUkCX3TyAa_z3-Qk02gBIUXeQ1o/view?usp=sharing)
+#### [Slides for sprint 1](https://docs.google.com/presentation/d/1CD8V3PlY5hwEqNEdIvMwRTETA6OSf6MouFY9GTvDByU/edit?usp=sharing)
 In the first sprint we focused on researching and deeply understanding our project as a whole and show a demo regarding writing and reading from the foundationDB
 ### [Sprint 2](https://youtu.be/9lLiGHvvhog)
+#### [Slides for sprint 2] (https://docs.google.com/presentation/d/16zytBjmp161QAiiBnQSlX3_3WsU6q6cu52AmnmUFiqs/edit?usp=sharing)
 In the second sprint are in the process of setting up everyones enviornment, debugging PathORAM code we found online, researching attacks, and demoed a client and server side communitcaiton of the foundationDB
+### [Sprint 3](https://youtu.be/VM-PZuz6tJM)
+#### [Slides for sprint 3](https://docs.google.com/presentation/d/1K-Tt-w3QFmhFGA-8sUNrtf0gfOCyxZMtjJOFLlK04D4/edit?usp=sharing)
+In the third sprint, we are able to successfully use an open-source PathORAM algorithm and enable its connection to FoundationDB, gaining a better understanding on the attack referenced in the paper, pivoting from our original direction in the project by switching to Java and potentially a new environment.
