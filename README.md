@@ -158,7 +158,7 @@ When you want to read the book, you go to the library and request the pages of t
 #### [Slides for sprint 1](https://docs.google.com/presentation/d/1CD8V3PlY5hwEqNEdIvMwRTETA6OSf6MouFY9GTvDByU/edit?usp=sharing)
 In the first sprint we focused on researching and deeply understanding our project as a whole and show a demo regarding writing and reading from the foundationDB
 ### [Sprint 2](https://youtu.be/9lLiGHvvhog)
-#### [Slides for sprint 2] (https://docs.google.com/presentation/d/16zytBjmp161QAiiBnQSlX3_3WsU6q6cu52AmnmUFiqs/edit?usp=sharing)
+#### [Slides for sprint 2](https://docs.google.com/presentation/d/16zytBjmp161QAiiBnQSlX3_3WsU6q6cu52AmnmUFiqs/edit?usp=sharing)
 In the second sprint are in the process of setting up everyones enviornment, debugging PathORAM code we found online, researching attacks, and demoed a client and server side communitcaiton of the foundationDB
 ### [Sprint 3](https://youtu.be/VM-PZuz6tJM)
 #### [Slides for sprint 3](https://docs.google.com/presentation/d/1K-Tt-w3QFmhFGA-8sUNrtf0gfOCyxZMtjJOFLlK04D4/edit?usp=sharing)
