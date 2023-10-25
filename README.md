@@ -40,8 +40,8 @@ These principal user roles, Sarah and Alex, encompass specific characteristics a
 ### Features in Scope:
 
 - Path ORAM Integration: The primary scope of the project is to implement the Path ORAM algorithm as an access method to FoundationDB. This integration will involve both client and server components that act as a front end to FoundationDB.
-- Client Library: The client library functions exposed to the user's application should look similar to FoundationDB's "put", "get", "range\_read", and "range\_clear" C API functions. In the background, the library will have to send and receive data to and from the Path ORAM server, and shuffle it to send it back to the server.
-- Server Process: The Path ORAM server will listen for incoming requests, store all data in the tree structure, and send the data back to the FoundationDB server via the FoundationDB C API.
+- Client Library: The client library functions exposed to the user's application should look similar to FoundationDB's "put", "get", "range\_read", and "range\_clear" Java API functions. In the background, the library will have to send and receive data to and from the Path ORAM server, and shuffle it to send it back to the server.
+- Server Process: The Path ORAM server will listen for incoming requests, store all data in the tree structure, and send the data back to the FoundationDB server via the FoundationDB Java API.
 - Attack Replication: Replicate a real-world attack that leverages access patterns. This involves simulating an adversarial scenario to analyze and understand the vulnerabilities that might exist within the system when it comes to privacy and access pattern analysis.
 - Overhead Analysis: Measure and analyze the overhead introduced by the use of the Path ORAM algorithm for various operations within the FoundationDB system. Explore potential strategies to mitigate this overhead.
 
@@ -62,7 +62,7 @@ These principal user roles, Sarah and Alex, encompass specific characteristics a
 2. PathORAM client gets the PathORAM node* from the position map data structure, within the client. The PathORAM client stores a data structure called a postion map. The position map, maps each key in the PIR system to a PathORAM node. The PathORAM client gets the PathORAM node for the desired key from the position map.
 3. The PathORAM client requests the PathORAM path to the desired PathORAM node from the PathORAM server. The PathORAM path is a sequence of PathORAM nodes that lead to the desired PathORAM node.  
 4. PathORAM Server fetches the data from FoundationDB for each PathORAM node on the path to the desired PathORAM node.
-5. FoundationDB sends the data back to the PathORAM server, which contructs the PathORAM tree. The PathORAM tree us a data structure that represents the relationship between PathORAM nodes
+5. FoundationDB sends the data back to the PathORAM server, which contructs the PathORAM tree. The PathORAM tree is a data structure that represents the relationship between PathORAM nodes
 6. PathORAM server sends the PathORAM path back to the PathORAM client get() function. 
 7. The PathORAM client preforms the PathORAM shuffling algorithm to mix up the PathORAM path. This prevents the PathORAM server from learning which PathORAM node the clients is trying to access. 
 8. get() returns the value of the key. The PathORAM client returns the value of the key to the application. 
@@ -78,10 +78,10 @@ Path ORAM Server (Server):
 - It returns all of the data from all of the nodes between the root and the leaf with the requested id (the tree branch) back to the client.
 - Then it receives the shuffled branch to update the tree.
 - This continuous random shuffling ensures access patterns are obscured, enhancing data privacy.
-- After each branch update, the Path ORAM server updates the key-value pairs in the FoundationDB server via the C API.
+- After each branch update, the Path ORAM server updates the key-value pairs in the FoundationDB server via the Java API.
 
 Path ORAM Client (Application):
-- The Path ORAM Client is a library for an application that consists of functions similar to the FoundationDB C API with the tradeoff in increased security for decreased performance.
+- The Path ORAM Client is a library for an application that consists of functions similar to the FoundationDB Java API with the tradeoff in increased security for decreased performance.
 - It stores a map that maps the leaf node id to the actual leaf node.
 - It sends the request tuple to the Path ORAM server, retrieves a branch, performs the shuffling, and sends it back to the server.
   
@@ -89,11 +89,6 @@ FoundationDB:
 - FoundationDB serves as the core database infrastructure of the system.
 - It stores data in a distributed manner, ensuring data durability, availability, and scalability.
 - The Path ORAM server communicates with FoundationDB to execute data operations based on requests from the Path ORAM Client.
-  
-Distributed Database (DistributedDB):
-- DistributedDB represents the collective database system, including multiple instances of FoundationDB, distributed across multiple servers or nodes.
-- This distributed architecture enhances the system's fault tolerance and scalability.
-- The Path ORAM Server, Path ORAM Client, and FoundationDB Client interact with the distributed database to provide a cohesive and distributed data storage solution.
 
 ### Design Implications and Reasons:
 
@@ -138,11 +133,12 @@ When you want to read the book, you go to the library and request the pages of t
 - Researched a variety of possible attacks that we can replicate
 - Debug the PathORAM we intended to implement 
 3. FoundationDB & PathORAM Integration [10/25/23]
-- Get a working open-source version of PathORAM, both in C++ and Java
+- Get a working open-source version of PathORAM, either in C++ or Java
 - Implement the PathORAM algorithm with FoundationDB in Java, encouraging a pivot point in our project
 - Decide on the attack we want to pursue: Our simulated attack must be of a compromised database that can witness access patterns of retrieval by PathORAM
 - Set up the types of analysis needed for the future: Overhead and Security
-4. FBD & PathORAM fully functioning & Basic Attack 
+4. FBD & PathORAM fully functioning & Basic Attack [11/08/23]
+- Implement client library functions exposed to the user's application (put, get, range\_read, and range\_clear)
 - Evaluate the system's performance, focusing on its efficiency, scalability, security, and fix potential bugs
 - Emulate an attack on our PathORAM to test its effectiveness
 - Research the potential of making a resizable ORAM to decide its feasibility
