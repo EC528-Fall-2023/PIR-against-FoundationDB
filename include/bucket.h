@@ -12,6 +12,7 @@ public:
 
 	std::array<Block, BLOCKS_PER_BUCKET> get_blocks();
 	void set_blocks(const std::array<Block, BLOCKS_PER_BUCKET>& blocks);
+	int set_indexed_block(Block block, uint32_t index);
 private:
 	std::array<Block, BLOCKS_PER_BUCKET> blocks;
 };
