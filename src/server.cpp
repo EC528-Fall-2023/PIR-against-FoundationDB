@@ -1,5 +1,6 @@
 #include "tree.h"
 #include <iostream>
+#include <cstring>
 #include <string>
 #include <stdlib.h>
 #include <unistd.h>
@@ -11,13 +12,6 @@
 
 #define FDB_API_VERSION 710
 #include <foundationdb/fdb_c.h>
-
-enum operation {
-	READ = 1,
-	WRITE,
-	READ_RANGE,
-	CLEAR_RANGE
-};
 
 void *run_network(void *arg)
 {
@@ -43,10 +37,11 @@ int main()
 	}
 
 	struct sockaddr_in address;
+	memset(&address, 0, sizeof(address));
 	address.sin_family = AF_INET;
 	address.sin_addr.s_addr = INADDR_ANY;
 	address.sin_port = htons(PORT);
-
+	
 	if (bind(server_socket, (struct sockaddr *) &address, sizeof(address)) < 0) {
 		std::cerr << "bind: failed\n";
 		exit(EXIT_FAILURE);
