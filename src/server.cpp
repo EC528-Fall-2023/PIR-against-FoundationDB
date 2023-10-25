@@ -1,7 +1,8 @@
-#include "tree.h"
+#include "../include/bucket.h"
 #include <iostream>
 #include <cstring>
 #include <string>
+#include <vector>
 #include <stdlib.h>
 #include <unistd.h>
 #include <pthread.h>
@@ -12,6 +13,11 @@
 
 #define FDB_API_VERSION 710
 #include <foundationdb/fdb_c.h>
+
+inline int send_branch();
+inline int recv_branch();
+inline int update_fdb();
+inline int find_path(std::vector<Bucket> &tree, std::vector<Block> &branch, uint32_t leaf_id);
 
 void *run_network(void *arg)
 {
@@ -72,6 +78,13 @@ int main()
 		exit(EXIT_FAILURE);
 	}
 
+	std::vector<Bucket> tree(8); // 7 nodes for 3 layer tree
+	std::array<uint8_t, BYTES_PER_BLOCK> temp;
+	temp.fill(1);
+	tree[1].set_indexed_block(Block(4, temp), 1);
+	tree[3].set_indexed_block(Block(0, temp), 0);
+	// leaf[1], block[1] and leaf[3], block[0] is filled with 1s
+
 	while (1) {
 		LISTEN:
 		if ( (client_socket = accept(server_socket, (struct sockaddr *) &address, &addr_len)) < 0 ) {
@@ -84,6 +97,7 @@ int main()
 			struct FDB_transaction *tr = NULL;
 			struct FDB_future *status = NULL;
 
+			// receive leaf_id
 			uint32_t leaf_id;
 			switch (recv(client_socket, &leaf_id, 4, 0)) {
 			case 0:
@@ -103,7 +117,10 @@ int main()
 			std::cout << "server: leaf_id = " << leaf_id << '\n';
 
 			// TODO: find actual num_buckets when traversing the tree
-			uint32_t num_buckets = 2;
+			std::vector<Block> branch;
+			find_path(tree, branch, leaf_id);
+			uint32_t num_buckets = branch.size();
+
 			if (send(client_socket, &num_buckets, 4, 0) != 4) {
 				std::cerr << "send: failed\n";
 				exit(EXIT_FAILURE);
@@ -127,6 +144,17 @@ int main()
 			}
 			std::cout << "server: sent 6 blocks (2 buckets)\n";
 
+			for (Block &block : branch) {
+				if (send(client_socket, block.get_data().data(), BYTES_PER_BLOCK, 0) != BYTES_PER_BLOCK) {
+					std::cerr << "send: failed\n";
+					return -1;
+				}
+			}
+
+			for (uint32_t i = 0; i < num_buckets * BLOCKS_PER_BUCKET; ++i) {
+				
+			}
+
 			if (fdb_database_create_transaction(db, &tr) != 0) {
 				std::cerr << "fdb_database_create_transaction: failed\n";
 				exit(EXIT_FAILURE);
@@ -144,5 +172,24 @@ int main()
 	close(client_socket);
 	shutdown(server_socket, SHUT_RDWR);
 
+	return 0;
+}
+
+inline int find_path(std::vector<Bucket> &tree, std::vector<Block> &branch, uint32_t leaf_id)
+{
+	if (leaf_id == 0)
+		return -1;
+	leaf_id -= 1;
+	uint32_t tree_idx = 1;
+	for (uint8_t i = 0; i < 31; ++i) {
+		for (Block &block : tree[tree_idx].get_blocks()) {
+			branch.push_back(block);
+		}
+		if (leaf_id | 0x40000000)
+			tree_idx = tree_idx * 2 + 1;
+		else
+			tree_idx = tree_idx * 2;
+		leaf_id <<= 1;
+	}
 	return 0;
 }

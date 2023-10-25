@@ -16,7 +16,7 @@ all: $(OBJ) app server
 app: $(OBJ_DIR)/app.o $(OBJ_DIR)/client.o $(OBJ_DIR)/block.o
 	$(CC) $^ $(LDLIBS) -o $@
 
-server: $(OBJ_DIR)/server.o
+server: $(OBJ_DIR)/server.o $(OBJ_DIR)/block.o $(OBJ_DIR)/bucket.o
 	$(CC) $^ /lib64/libfdb_c.so $(LDLIBS) -o $@
 
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp | $(OBJ_DIR)

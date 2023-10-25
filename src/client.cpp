@@ -56,16 +56,15 @@ int PathOramClient::put(const std::string &key_name, const std::vector<uint8_t> 
 }
 
 // TODO: implement first
-// TODO: replace all vector data values to std::ARRAY
 int PathOramClient::get(const std::string &key_name, std::array<uint8_t, BYTES_PER_BLOCK> &value)
 {
+/*
 	if (position_map.find(key_name) == position_map.end()) {
 		std::cerr << "key is not in position map\n";
 		return -1;
 	}
-
-	stash = fetch_branch(position_map[key_name]);
-	if (stash.size() == 0) {
+*/
+	if (fetch_branch(position_map[key_name]) == -1) {
 		std::cerr << "fetch_branch: failed" << std::endl;
 		exit(EXIT_FAILURE);
 	}
@@ -73,35 +72,39 @@ int PathOramClient::get(const std::string &key_name, std::array<uint8_t, BYTES_P
 	// decrypt branch if encrypted
 
 	// perform swaps
-	for (uint32_t i = 0; i < stash.size(); ++i) {
-		uint32_t current_leaf_id = stash[i].get_leaf_id();
+	for (Block &current_block : branch) {
+		uint32_t current_leaf_id = current_block.get_leaf_id();
 		if (current_leaf_id == 0)
 			continue;
 		uint32_t requested_leaf_id = position_map[key_name];
 
 		if (current_leaf_id == requested_leaf_id) {
-			std::copy(stash[i].get_data().begin(), stash[i].get_data().end(), value.begin());
-			uint32_t rand_leaf_id = 0; // TODO: set up randomness
+			std::copy(current_block.get_data().begin(), current_block.get_data().end(), value.begin());
+			uint32_t rand_leaf_id = 1; // TODO: set up randomness
 			uint32_t idx = find_intersection_bucket(current_leaf_id, rand_leaf_id);
 			long j;
 			for (j = (idx + 1) * BLOCKS_PER_BUCKET - 1; j >= 0; --j) {
-				if (stash[j].get_leaf_id() == 0) {
-					swap_blocks(stash[i], stash[j]);
-					break;
+				if (branch[j].get_leaf_id() == 0) {
+					swap_blocks(current_block, branch[j]);
+					goto ENCRYPT;
 				}
 			}
 			if (j == -1) {
-				// store in stash
+				// store in branch
 				// free branch[i]
 			}
-			goto ENCRYPT;
-		}
-
-		uint32_t idx = find_intersection_bucket(current_leaf_id, requested_leaf_id);
-		for (uint32_t j = idx * BLOCKS_PER_BUCKET; j < (idx + 1) * BLOCKS_PER_BUCKET; ++j) {
-			if (stash[j].get_leaf_id() == 0) {
-				swap_blocks(stash[i], stash[j]);
-				break;
+		} else {
+			uint32_t idx = find_intersection_bucket(current_leaf_id, requested_leaf_id);
+			long j;
+			for (j = idx * BLOCKS_PER_BUCKET; j < (idx + 1) * BLOCKS_PER_BUCKET; ++j) {
+				if (branch[j].get_leaf_id() == 0) {
+					swap_blocks(current_block, branch[j]);
+					break;
+				}
+			}
+			if (j == (idx + 1) * BLOCKS_PER_BUCKET) {
+				// store in stash
+				// free branch[i]
 			}
 		}
 	}
@@ -110,6 +113,10 @@ int PathOramClient::get(const std::string &key_name, std::array<uint8_t, BYTES_P
 	// encrypt branch
 
 	// send branch back
+	if (send_branch() == -1) {
+		std::cerr << "send_branch: failed\n";
+		exit(EXIT_FAILURE);
+	}
 
 	return 0;
 }
@@ -124,7 +131,7 @@ int PathOramClient::clear_range(const std::string &begin_key_name, const std::st
 	return 0;
 }
 
-std::vector<Block> PathOramClient::fetch_branch(uint32_t leaf_id)
+int PathOramClient::fetch_branch(uint32_t leaf_id)
 {
 	/*
 	BRANCH METADATA:
@@ -139,45 +146,44 @@ std::vector<Block> PathOramClient::fetch_branch(uint32_t leaf_id)
 
 	if (send(socket_fd, &leaf_id, 4, 0) != 4) {
 		std::cerr << "send: failed" << std::endl;
-		return std::vector<Block> ();
+		return -1;
 	}
 	std::cout << "client: sent leaf_id = " << leaf_id << '\n';
 
 	uint32_t num_buckets;
 	if (recv(socket_fd, &num_buckets, 4, 0) != 4) {
 		std::cerr << "recv: failed" << std::endl;
-		return std::vector<Block> ();
+		return -1;
 	}
 	std::cout << "client: num_buckets = " << num_buckets << '\n';
 
 	std::vector<uint32_t> leaf_ids (num_buckets * BLOCKS_PER_BUCKET, 0);
 	if (recv(socket_fd, leaf_ids.data(), 4 * num_buckets * BLOCKS_PER_BUCKET, 0) != 4 * num_buckets * BLOCKS_PER_BUCKET) {
 		std::cerr << "recv: failed" << std::endl;
-		return std::vector<Block> ();
+		return -1;
 	}
 	std::cout << "client: leaf_ids =";
 	for (uint32_t id : leaf_ids)
 		std::cout << ' ' << id;
 	std::cout << '\n';
 
-	std::vector<Block> branch (num_buckets * BLOCKS_PER_BUCKET);
 	std::array<uint8_t, BYTES_PER_BLOCK> data_buffer;
 	for (uint32_t i = 0; i < num_buckets * BLOCKS_PER_BUCKET; ++i) {
 		data_buffer.fill(0);
 		if (recv(socket_fd, data_buffer.data(), BYTES_PER_BLOCK, 0) != BYTES_PER_BLOCK) {
 			std::cerr << "recv: failed" << std::endl;
-			return std::vector<Block> ();
+			return -1;
 		}
-		branch[i] = Block(leaf_ids[i], i % BLOCKS_PER_BUCKET, data_buffer);
+		branch[i] = Block(leaf_ids[i], data_buffer);
 	}
 
-	return branch;
+	return 0;
 }
 
 uint32_t PathOramClient::find_intersection_bucket(uint32_t leaf_id_1, uint32_t leaf_id_2)
 {
 	// returns the index of the lowest intersecting bucket
-	uint32_t idx = stash.size() / BLOCKS_PER_BUCKET - 1;
+	uint32_t idx = branch.size() / BLOCKS_PER_BUCKET - 1;
 	--leaf_id_1;
 	--leaf_id_2;
 	while (leaf_id_1 != leaf_id_2) {
@@ -197,7 +203,14 @@ inline void PathOramClient::swap_blocks(Block &block1, Block &block2)
 	block2.set_data(temp.get_data());
 }
 
-int PathOramClient::send_branch(std::vector<Block> branch)
+int PathOramClient::send_branch()
 {
+	for (Block &block : branch) {
+		if (send(socket_fd, block.get_data().data(), BYTES_PER_BLOCK, 0) != BYTES_PER_BLOCK) {
+			std::cerr << "send: failed\n";
+			return -1;
+		}
+	}
+	std::cout << "client: sent " << branch.size() * BLOCKS_PER_BUCKET << " updated blocks to server\n";
 	return 0;
 }

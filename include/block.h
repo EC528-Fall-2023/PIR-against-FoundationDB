@@ -9,7 +9,7 @@
 class Block {
 public:
 	Block();
-	Block(uint32_t leaf_id, uint32_t bucket_idx, const std::array<uint8_t, BYTES_PER_BLOCK>& data);
+	Block(uint32_t leaf_id, const std::array<uint8_t, BYTES_PER_BLOCK>& data);
 
 	uint32_t get_leaf_id();
 	uint32_t get_bucket_idx();
