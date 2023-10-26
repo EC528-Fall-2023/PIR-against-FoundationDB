@@ -12,6 +12,8 @@
 - Orran Krieger
 - Ata Turk
 
+### Orginal Paper 
+Here is the original paper of the pathORAM: [Orginal Paper](https://people.csail.mit.edu/devadas/pubs/PathORam.pdf)
 ## 1. Vision and Goals Of The Project
 Our vision is to see the Path ORAM algorithm fully implemented in a client library and a server process between the user application and the FoundationDB server. The entire system should be implemented such that the client exposes a simplified interface of the FoundationDB API to the user, while adversaries cannot infer much information in a compromised database. Along the way, we will create attacks against a database to understand why sole data encryption is not enough to protect information leaking out to adversaries, and why PIR is needed for increased security.
 
