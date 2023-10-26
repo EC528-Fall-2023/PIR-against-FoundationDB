@@ -161,3 +161,6 @@ In the second sprint are in the process of setting up everyones enviornment, deb
 ### [Sprint 3](https://youtu.be/VM-PZuz6tJM)
 #### [Slides for sprint 3](https://docs.google.com/presentation/d/1K-Tt-w3QFmhFGA-8sUNrtf0gfOCyxZMtjJOFLlK04D4/edit?usp=sharing)
 In the third sprint, we are able to successfully use an open-source PathORAM algorithm and enable its connection to FoundationDB, gaining a better understanding on the attack referenced in the paper, pivoting from our original direction in the project by switching to Java and potentially a new environment.
+
+## 8. References
+- Stefanov, Emil & van Dijk, Marten & Shi, Elaine & Fletcher, Christopher & Ren, Ling & Yu, Xiangyao & Devadas, Sahana. (2012). Path ORAM: an extremely simple oblivious RAM protocol. Proceedings of the ACM Conference on Computer and Communications Security. 10.1145/2508859.2516660.
