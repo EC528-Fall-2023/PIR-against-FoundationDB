@@ -1,4 +1,4 @@
-#include "../include/bucket.h"
+#include "tree.h"
 #include <iostream>
 #include <cstring>
 #include <string>
@@ -17,7 +17,6 @@
 inline int send_branch();
 inline int recv_branch();
 inline int update_fdb();
-inline int find_path(std::vector<Bucket> &tree, std::vector<Block> &branch, uint32_t leaf_id);
 
 void *run_network(void *arg)
 {
@@ -32,13 +31,13 @@ int main()
 {
 	int server_socket;
 	if ( (server_socket = socket(AF_INET, SOCK_STREAM, 0)) < 0 ) {
-		std::cerr << "socket: failed\n";
+		std::cerr << "server: socket: failed\n";
 		exit(EXIT_FAILURE);
 	}
 
 	int opt = 1;
 	if (setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
-		std::cerr << "setsockopt: failed\n";
+		std::cerr << "server: setsockopt: failed\n";
 		exit(EXIT_FAILURE);
 	}
 
@@ -49,12 +48,12 @@ int main()
 	address.sin_port = htons(PORT);
 	
 	if (bind(server_socket, (struct sockaddr *) &address, sizeof(address)) < 0) {
-		std::cerr << "bind: failed\n";
+		std::cerr << "server: bind: failed\n";
 		exit(EXIT_FAILURE);
 	}
 
 	if (listen(server_socket, 3) < 0) {
-		std::cerr << "listen: failed\n";
+		std::cerr << "server: listen: failed\n";
 		exit(EXIT_FAILURE);
 	}
 
@@ -78,17 +77,20 @@ int main()
 		exit(EXIT_FAILURE);
 	}
 
-	std::vector<Bucket> tree(8); // 7 nodes for 3 layer tree
-	std::array<uint8_t, BYTES_PER_BLOCK> temp;
+	// create tree structure in an array
+	Tree tree(UINT16_MAX);
+
+	// example nodes
+	std::array<uint8_t, BYTES_PER_BLOCK> temp; // 2^16-1 nodes with 2^15 leafs with levels 0-15
 	temp.fill(1);
-	tree[1].set_indexed_block(Block(4, temp), 1);
-	tree[3].set_indexed_block(Block(0, temp), 0);
-	// leaf[1], block[1] and leaf[3], block[0] is filled with 1s
+	// int Tree::set_block(Block src_block, uint16_t bucket_index, uint16_t block_index)
+	tree.set_block(Block(4, temp), 0, 1); // tree[0][1] => leaf_id = 4, data = temp
+	tree.set_block(Block(1, temp), 1, 0); // tree[1][0] => leaf_id = 1, data = temp
 
 	while (1) {
 		LISTEN:
 		if ( (client_socket = accept(server_socket, (struct sockaddr *) &address, &addr_len)) < 0 ) {
-			std::cerr << "accept: failed\n";
+			std::cerr << "server: accept: failed\n";
 			exit(EXIT_FAILURE);
 		}
 		std::cout << "server: connection established\n";
@@ -98,8 +100,8 @@ int main()
 			struct FDB_future *status = NULL;
 
 			// receive leaf_id
-			uint32_t leaf_id;
-			switch (recv(client_socket, &leaf_id, 4, 0)) {
+			uint16_t leaf_id;
+			switch (recv(client_socket, &leaf_id, sizeof(leaf_id), 0)) {
 			case 0:
 				if (status != NULL)
 					fdb_future_destroy(status);
@@ -108,59 +110,79 @@ int main()
 				std::cout << "server: client disconnected\n";
 				goto LISTEN;
 				break;
-			case 4:
+			case sizeof(leaf_id):
 				break;
 			default:
-				std::cerr << "recv: failed\n";
+				std::cerr << "server: recv: failed\n";
 				exit(EXIT_FAILURE);
 			}
 			std::cout << "server: leaf_id = " << leaf_id << '\n';
 
-			// TODO: find actual num_buckets when traversing the tree
+			// find branch given leaf_id
 			std::vector<Block> branch;
-			find_path(tree, branch, leaf_id);
-			uint32_t num_buckets = branch.size();
-
-			if (send(client_socket, &num_buckets, 4, 0) != 4) {
-				std::cerr << "send: failed\n";
+			if (tree.get_path(branch, leaf_id) != 0) {
+				std::cerr << "server: get_path: failed\n";
 				exit(EXIT_FAILURE);
 			}
-			std::cout << "server: sent num_buckets\n";
 
-			std::vector<uint32_t> leaf_ids (2 * BLOCKS_PER_BUCKET);
-			if (send(client_socket, leaf_ids.data(), 8 * BLOCKS_PER_BUCKET, 0) != 8 * BLOCKS_PER_BUCKET) {
-				std::cerr << "send: failed\n";
+			// send number of blocks to send
+			uint16_t num_blocks = branch.size();
+			if (send(client_socket, &num_blocks, sizeof(num_blocks), 0) != sizeof(num_blocks)) {
+				std::cerr << "server: send: failed\n";
 				exit(EXIT_FAILURE);
 			}
-			std::cout << "server: sent leaf_ids\n";
+			std::cout << "server: sent num_blocks = " << num_blocks << '\n';
 
-			std::array<uint8_t, BYTES_PER_BLOCK> data_buffer;
-			data_buffer.fill(1);
-			for (uint32_t i = 0; i < num_buckets * BLOCKS_PER_BUCKET; ++i) {
-				if (send(client_socket, data_buffer.data(), BYTES_PER_BLOCK, 0) != BYTES_PER_BLOCK) {
-					std::cerr << "send: failed\n";
+			// send all leaf_ids in branch
+			for (Block &block : branch) {
+				uint16_t leaf_id = block.get_leaf_id();
+				if (send(client_socket, &leaf_id, sizeof(leaf_id), 0) != sizeof(leaf_id)) {
+					std::cerr << "server: send: failed\n";
 					exit(EXIT_FAILURE);
 				}
 			}
-			std::cout << "server: sent 6 blocks (2 buckets)\n";
+			std::cout << "server: sent leaf_ids\n";
 
+			// send all data in branch
 			for (Block &block : branch) {
 				if (send(client_socket, block.get_data().data(), BYTES_PER_BLOCK, 0) != BYTES_PER_BLOCK) {
-					std::cerr << "send: failed\n";
-					return -1;
+					std::cerr << "server: send: failed\n";
+					exit(EXIT_FAILURE);
 				}
 			}
+			std::cout << "server: sent " << branch.size() << " blocks\n";
 
-			for (uint32_t i = 0; i < num_buckets * BLOCKS_PER_BUCKET; ++i) {
+			// receive + update all leaf_id from branch
+			std::cout << "server: leaf_ids = ";
+			for (Block &block : branch) {
+				uint16_t leaf_id;
+				if (recv(client_socket, &leaf_id, sizeof(leaf_id), 0) != sizeof(leaf_id)) {
+					std::cerr << "server: recv: failed\n";
+					exit(EXIT_FAILURE);
+				}
+				block.set_leaf_id(leaf_id);
+				std::cout << leaf_id << ' ';
+			}
+			std::cout << "\nserver: recv updated leaf_ids\n";
+
+			// receive + update all data from branch
+			for (Block &block : branch) {
+				std::array<uint8_t, BYTES_PER_BLOCK> data_buffer;
+				if (recv(client_socket, data_buffer.data(), BYTES_PER_BLOCK, 0) != BYTES_PER_BLOCK) {
+					std::cerr << "server: recv: failed\n";
+					exit(EXIT_FAILURE);
+				}
+				block.set_data(data_buffer);
 				
 			}
+			std::cout << "server: recv updated data\n";
 
+			
 			if (fdb_database_create_transaction(db, &tr) != 0) {
 				std::cerr << "fdb_database_create_transaction: failed\n";
 				exit(EXIT_FAILURE);
 			}
 
-			// do stuff with status
 
 			if (status != NULL)
 				fdb_future_destroy(status);
@@ -172,24 +194,5 @@ int main()
 	close(client_socket);
 	shutdown(server_socket, SHUT_RDWR);
 
-	return 0;
-}
-
-inline int find_path(std::vector<Bucket> &tree, std::vector<Block> &branch, uint32_t leaf_id)
-{
-	if (leaf_id == 0)
-		return -1;
-	leaf_id -= 1;
-	uint32_t tree_idx = 1;
-	for (uint8_t i = 0; i < 31; ++i) {
-		for (Block &block : tree[tree_idx].get_blocks()) {
-			branch.push_back(block);
-		}
-		if (leaf_id | 0x40000000)
-			tree_idx = tree_idx * 2 + 1;
-		else
-			tree_idx = tree_idx * 2;
-		leaf_id <<= 1;
-	}
 	return 0;
 }
