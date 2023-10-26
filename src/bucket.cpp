@@ -17,7 +17,8 @@ Bucket::Bucket()
 {
 	std::array<uint8_t, BYTES_PER_BLOCK> temp;
 	for (int i = 0; i < BLOCKS_PER_BUCKET; ++i) {
-		blocks[i] = Block(0, temp);
+		blocks[i].set_leaf_id(0);
+		blocks[i].set_data(temp);
 	}
 }
 
@@ -36,7 +37,7 @@ void Bucket::set_blocks(const std::array<Block, BLOCKS_PER_BUCKET>& blocks)
 	this->blocks = blocks;
 }
 
-int Bucket::set_indexed_block(Block block, uint32_t index)
+int Bucket::set_indexed_block(Block block, uint16_t index)
 {
 	if (index >= BLOCKS_PER_BUCKET)
 		return -1;

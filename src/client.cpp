@@ -49,23 +49,23 @@ PathOramClient::~PathOramClient()
 {
 	close(socket_fd);
 }
-
+/*
 int PathOramClient::put(const std::string &key_name, const std::vector<uint8_t> &value)
 {
 	return 0;
 }
-
+*/
 // TODO: implement first
 int PathOramClient::get(const std::string &key_name, std::array<uint8_t, BYTES_PER_BLOCK> &value)
 {
-/*
+	position_map[key_name] = 1;
 	if (position_map.find(key_name) == position_map.end()) {
 		std::cerr << "key is not in position map\n";
 		return -1;
 	}
-*/
+
 	if (fetch_branch(position_map[key_name]) == -1) {
-		std::cerr << "fetch_branch: failed" << std::endl;
+		std::cerr << "client: fetch_branch: failed" << std::endl;
 		exit(EXIT_FAILURE);
 	}
 
@@ -73,15 +73,19 @@ int PathOramClient::get(const std::string &key_name, std::array<uint8_t, BYTES_P
 
 	// perform swaps
 	for (Block &current_block : branch) {
-		uint32_t current_leaf_id = current_block.get_leaf_id();
+		uint16_t current_leaf_id = current_block.get_leaf_id();
 		if (current_leaf_id == 0)
 			continue;
-		uint32_t requested_leaf_id = position_map[key_name];
+		uint16_t requested_leaf_id = position_map[key_name];
+
+		// tree[0][1] => leaf_id = 4, data = temp
+		// tree[1][0] => leaf_id = 1, data = temp
+		// 0 4 0 1 0 0
 
 		if (current_leaf_id == requested_leaf_id) {
 			std::copy(current_block.get_data().begin(), current_block.get_data().end(), value.begin());
-			uint32_t rand_leaf_id = 1; // TODO: set up randomness
-			uint32_t idx = find_intersection_bucket(current_leaf_id, rand_leaf_id);
+			uint16_t rand_leaf_id = 1; // TODO: set up randomness
+			uint16_t idx = find_intersection_bucket(current_leaf_id, rand_leaf_id);
 			long j;
 			for (j = (idx + 1) * BLOCKS_PER_BUCKET - 1; j >= 0; --j) {
 				if (branch[j].get_leaf_id() == 0) {
@@ -94,7 +98,7 @@ int PathOramClient::get(const std::string &key_name, std::array<uint8_t, BYTES_P
 				// free branch[i]
 			}
 		} else {
-			uint32_t idx = find_intersection_bucket(current_leaf_id, requested_leaf_id);
+			uint16_t idx = find_intersection_bucket(current_leaf_id, requested_leaf_id);
 			long j;
 			for (j = idx * BLOCKS_PER_BUCKET; j < (idx + 1) * BLOCKS_PER_BUCKET; ++j) {
 				if (branch[j].get_leaf_id() == 0) {
@@ -114,13 +118,13 @@ int PathOramClient::get(const std::string &key_name, std::array<uint8_t, BYTES_P
 
 	// send branch back
 	if (send_branch() == -1) {
-		std::cerr << "send_branch: failed\n";
+		std::cerr << "client: send_branch: failed\n";
 		exit(EXIT_FAILURE);
 	}
 
 	return 0;
 }
-
+/*
 int PathOramClient::read_range(const std::string &begin_key_name, const std::string &end_key_name)
 {
 	return 0;
@@ -130,48 +134,49 @@ int PathOramClient::clear_range(const std::string &begin_key_name, const std::st
 {
 	return 0;
 }
-
-int PathOramClient::fetch_branch(uint32_t leaf_id)
+*/
+int PathOramClient::fetch_branch(uint16_t leaf_id)
 {
 	/*
 	BRANCH METADATA:
-	uint32_t num_buckets	// can infer num_blocks = num_buckets * BLOCKS_PER_BUCKET
-	uint32_t leaf_ids[0]
-	uint32_t leaf_ids[1]
+	uint16_t num_buckets	// can infer num_blocks = num_buckets * BLOCKS_PER_BUCKET
+	uint16_t leaf_ids[0]
+	uint16_t leaf_ids[1]
 	...
 	Block data_buffer[0]
 	Block data_buffer[1]
 	...
 	*/
 
-	if (send(socket_fd, &leaf_id, 4, 0) != 4) {
-		std::cerr << "send: failed" << std::endl;
+	if (send(socket_fd, &leaf_id, sizeof(leaf_id), 0) != sizeof(leaf_id)) {
+		std::cerr << "client: send: failed" << std::endl;
 		return -1;
 	}
 	std::cout << "client: sent leaf_id = " << leaf_id << '\n';
 
-	uint32_t num_buckets;
-	if (recv(socket_fd, &num_buckets, 4, 0) != 4) {
-		std::cerr << "recv: failed" << std::endl;
+	uint16_t num_blocks;
+	if (recv(socket_fd, &num_blocks, sizeof(num_blocks), 0) != sizeof(num_blocks)) {
+		std::cerr << "client: recv: failed" << std::endl;
 		return -1;
 	}
-	std::cout << "client: num_buckets = " << num_buckets << '\n';
+	branch.resize(num_blocks);
+	std::cout << "client: num_blocks = " << num_blocks << '\n';
 
-	std::vector<uint32_t> leaf_ids (num_buckets * BLOCKS_PER_BUCKET, 0);
-	if (recv(socket_fd, leaf_ids.data(), 4 * num_buckets * BLOCKS_PER_BUCKET, 0) != 4 * num_buckets * BLOCKS_PER_BUCKET) {
-		std::cerr << "recv: failed" << std::endl;
+	std::vector<uint16_t> leaf_ids (num_blocks, 0);
+	if (recv(socket_fd, leaf_ids.data(), sizeof(uint16_t) * num_blocks, 0) != (long int) sizeof(uint16_t) * num_blocks) {
+		std::cerr << "client: recv: failed" << std::endl;
 		return -1;
 	}
 	std::cout << "client: leaf_ids =";
-	for (uint32_t id : leaf_ids)
+	for (uint16_t id : leaf_ids)
 		std::cout << ' ' << id;
 	std::cout << '\n';
 
 	std::array<uint8_t, BYTES_PER_BLOCK> data_buffer;
-	for (uint32_t i = 0; i < num_buckets * BLOCKS_PER_BUCKET; ++i) {
+	for (uint16_t i = 0; i < num_blocks; ++i) {
 		data_buffer.fill(0);
 		if (recv(socket_fd, data_buffer.data(), BYTES_PER_BLOCK, 0) != BYTES_PER_BLOCK) {
-			std::cerr << "recv: failed" << std::endl;
+			std::cerr << "client: recv: failed" << std::endl;
 			return -1;
 		}
 		branch[i] = Block(leaf_ids[i], data_buffer);
@@ -180,10 +185,10 @@ int PathOramClient::fetch_branch(uint32_t leaf_id)
 	return 0;
 }
 
-uint32_t PathOramClient::find_intersection_bucket(uint32_t leaf_id_1, uint32_t leaf_id_2)
+uint16_t PathOramClient::find_intersection_bucket(uint16_t leaf_id_1, uint16_t leaf_id_2)
 {
 	// returns the index of the lowest intersecting bucket
-	uint32_t idx = branch.size() / BLOCKS_PER_BUCKET - 1;
+	uint16_t idx = branch.size() / BLOCKS_PER_BUCKET - 1;
 	--leaf_id_1;
 	--leaf_id_2;
 	while (leaf_id_1 != leaf_id_2) {
@@ -206,11 +211,21 @@ inline void PathOramClient::swap_blocks(Block &block1, Block &block2)
 int PathOramClient::send_branch()
 {
 	for (Block &block : branch) {
+		uint16_t leaf_id = block.get_leaf_id();
+		if (send(socket_fd, &leaf_id, sizeof(leaf_id), 0) != sizeof(leaf_id)) {
+			std::cerr << "send: failed\n";
+			return -1;
+		}
+	}
+	std::cout << "client: sent " << branch.size() << " updated leaf_ids to server\n";
+
+	for (Block &block : branch) {
 		if (send(socket_fd, block.get_data().data(), BYTES_PER_BLOCK, 0) != BYTES_PER_BLOCK) {
 			std::cerr << "send: failed\n";
 			return -1;
 		}
 	}
-	std::cout << "client: sent " << branch.size() * BLOCKS_PER_BUCKET << " updated blocks to server\n";
+
+	std::cout << "client: sent " << branch.size() << " updated blocks to server\n";
 	return 0;
 }
