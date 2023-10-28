@@ -10,7 +10,7 @@ public:
 	Bucket();
 	Bucket(const std::array<Block, BLOCKS_PER_BUCKET>& blocks);
 
-	std::array<Block, BLOCKS_PER_BUCKET> get_blocks();
+	std::array<Block, BLOCKS_PER_BUCKET> &get_blocks();
 	void set_blocks(const std::array<Block, BLOCKS_PER_BUCKET>& blocks);
 	int set_indexed_block(Block block, uint16_t index);
 private:

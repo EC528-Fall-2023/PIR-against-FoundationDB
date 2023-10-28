@@ -8,9 +8,14 @@
 #include <string>
 #include <vector>
 #include <map>
-#include <memory>
+#include <random>
 #include <sys/socket.h>
 #include <arpa/inet.h>
+
+enum Operation {
+	READ,
+	WRITE
+};
 
 class PathOramClient {
 public:
@@ -34,9 +39,10 @@ private:
 	static PathOramClient *instance;
 */
 	int fetch_branch(uint16_t leaf_id);
-	int send_branch();
+	void traverse_branch(uint16_t requested_leaf_id, uint16_t rand_leaf_id, enum Operation op, std::array<uint8_t, BYTES_PER_BLOCK> &value);
 	uint16_t find_intersection_bucket(uint16_t leaf_id_1, uint16_t leaf_id_2);
 	void swap_blocks(Block &block1, Block &block2);
+	int send_branch();
 
 	int socket_fd;
 	std::map<std::string, uint16_t> position_map;

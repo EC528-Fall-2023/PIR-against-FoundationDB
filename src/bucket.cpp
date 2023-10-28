@@ -27,7 +27,7 @@ Bucket::Bucket(const std::array<Block, BLOCKS_PER_BUCKET>& blocks)
 	this->blocks = blocks;
 }
 
-std::array<Block, BLOCKS_PER_BUCKET> Bucket::get_blocks()
+std::array<Block, BLOCKS_PER_BUCKET> &Bucket::get_blocks()
 {
 	return blocks;
 }

@@ -8,6 +8,7 @@
 #include <pthread.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>
 
 #define PORT 8080
 
@@ -93,7 +94,10 @@ int main()
 			std::cerr << "server: accept: failed\n";
 			exit(EXIT_FAILURE);
 		}
-		std::cout << "server: connection established\n";
+		struct in_addr ip_addr = address.sin_addr;
+		std::string str(INET_ADDRSTRLEN, '\0');
+		inet_ntop( AF_INET, &ip_addr, str.data(), INET_ADDRSTRLEN );
+		std::cout << "server: connection to " << str << " established\n";
 
 		while (1) {
 			struct FDB_transaction *tr = NULL;
@@ -108,6 +112,7 @@ int main()
 				if (tr != NULL)
 					fdb_transaction_destroy(tr);
 				std::cout << "server: client disconnected\n";
+				close(client_socket);
 				goto LISTEN;
 				break;
 			case sizeof(leaf_id):
@@ -153,7 +158,6 @@ int main()
 			std::cout << "server: sent " << branch.size() << " blocks\n";
 
 			// receive + update all leaf_id from branch
-			std::cout << "server: leaf_ids = ";
 			for (Block &block : branch) {
 				uint16_t leaf_id;
 				if (recv(client_socket, &leaf_id, sizeof(leaf_id), 0) != sizeof(leaf_id)) {
@@ -161,7 +165,12 @@ int main()
 					exit(EXIT_FAILURE);
 				}
 				block.set_leaf_id(leaf_id);
-				std::cout << leaf_id << ' ';
+			}
+			std::cout << "server: leaf_ids =";
+			for (unsigned long int i = 0; i < branch.size(); ++i) {
+				if (i % 3 == 0)
+					std::cout << " |";
+				std::cout << ' ' << branch[i].get_leaf_id();
 			}
 			std::cout << "\nserver: recv updated leaf_ids\n";
 
