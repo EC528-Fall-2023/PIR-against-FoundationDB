@@ -36,7 +36,7 @@ int Tree::get_path(std::vector<Block> &branch, uint16_t leaf_id)
 		return -1;
 	leaf_id -= 1;
 	uint16_t tree_idx = 1;
-	for (uint8_t i = 0; i < 15; ++i) {
+	for (uint8_t i = 0; i < 16; ++i) {
 		for (Block &block : bucket_array[tree_idx - 1].get_blocks()) {
 			branch.push_back(block);
 		}

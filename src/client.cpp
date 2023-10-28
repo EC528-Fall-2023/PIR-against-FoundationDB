@@ -1,23 +1,10 @@
-/*
-class PathOramClient {
-public:
-	PathOramClient(const std::string &server_ip);
-	~PathOramClient();
-
-	int put(const std::string &key_name, const std::string &value);
-	int get(const std::string &key_name, std::string &value);
-	int read_range(const std::string &begin_key_name, const std::string &end_key_name);
-	int clear_range(const std::string &begin_key_name, const std::string &end_key_name);
-
-private:
-	
-};
-*/
-
 #include "client.h"
 #include "bucket.h"
 #include "block.h"
 #include <algorithm>
+
+static std::random_device generator;
+static std::uniform_int_distribution<int> oram_random(1, 32768); // [1, 2^15]
 
 PathOramClient::PathOramClient(const std::string &server_ip, const int port)
 {
@@ -64,7 +51,11 @@ int PathOramClient::get(const std::string &key_name, std::array<uint8_t, BYTES_P
 		return -1;
 	}
 
-	if (fetch_branch(position_map[key_name]) == -1) {
+	uint16_t requested_leaf_id = position_map[key_name];
+	uint16_t rand_leaf_id = oram_random(generator);
+	position_map[key_name] = rand_leaf_id;
+
+	if (fetch_branch(requested_leaf_id) == -1) {
 		std::cerr << "client: fetch_branch: failed" << std::endl;
 		exit(EXIT_FAILURE);
 	}
@@ -72,48 +63,8 @@ int PathOramClient::get(const std::string &key_name, std::array<uint8_t, BYTES_P
 	// decrypt branch if encrypted
 
 	// perform swaps
-	for (Block &current_block : branch) {
-		uint16_t current_leaf_id = current_block.get_leaf_id();
-		if (current_leaf_id == 0)
-			continue;
-		uint16_t requested_leaf_id = position_map[key_name];
+	traverse_branch(requested_leaf_id, rand_leaf_id, READ, value);
 
-		// tree[0][1] => leaf_id = 4, data = temp
-		// tree[1][0] => leaf_id = 1, data = temp
-		// 0 4 0 1 0 0
-
-		if (current_leaf_id == requested_leaf_id) {
-			std::copy(current_block.get_data().begin(), current_block.get_data().end(), value.begin());
-			uint16_t rand_leaf_id = 1; // TODO: set up randomness
-			uint16_t idx = find_intersection_bucket(current_leaf_id, rand_leaf_id);
-			long j;
-			for (j = (idx + 1) * BLOCKS_PER_BUCKET - 1; j >= 0; --j) {
-				if (branch[j].get_leaf_id() == 0) {
-					swap_blocks(current_block, branch[j]);
-					goto ENCRYPT;
-				}
-			}
-			if (j == -1) {
-				// store in branch
-				// free branch[i]
-			}
-		} else {
-			uint16_t idx = find_intersection_bucket(current_leaf_id, requested_leaf_id);
-			long j;
-			for (j = idx * BLOCKS_PER_BUCKET; j < (idx + 1) * BLOCKS_PER_BUCKET; ++j) {
-				if (branch[j].get_leaf_id() == 0) {
-					swap_blocks(current_block, branch[j]);
-					break;
-				}
-			}
-			if (j == (idx + 1) * BLOCKS_PER_BUCKET) {
-				// store in stash
-				// free branch[i]
-			}
-		}
-	}
-
-	ENCRYPT:
 	// encrypt branch
 
 	// send branch back
@@ -137,17 +88,6 @@ int PathOramClient::clear_range(const std::string &begin_key_name, const std::st
 */
 int PathOramClient::fetch_branch(uint16_t leaf_id)
 {
-	/*
-	BRANCH METADATA:
-	uint16_t num_buckets	// can infer num_blocks = num_buckets * BLOCKS_PER_BUCKET
-	uint16_t leaf_ids[0]
-	uint16_t leaf_ids[1]
-	...
-	Block data_buffer[0]
-	Block data_buffer[1]
-	...
-	*/
-
 	if (send(socket_fd, &leaf_id, sizeof(leaf_id), 0) != sizeof(leaf_id)) {
 		std::cerr << "client: send: failed" << std::endl;
 		return -1;
@@ -168,8 +108,11 @@ int PathOramClient::fetch_branch(uint16_t leaf_id)
 		return -1;
 	}
 	std::cout << "client: leaf_ids =";
-	for (uint16_t id : leaf_ids)
-		std::cout << ' ' << id;
+	for (int i = 0; i < num_blocks; ++i) {
+		if (i % 3 == 0)
+			std::cout << " |";
+		std::cout << ' ' << leaf_ids[i];
+	}
 	std::cout << '\n';
 
 	std::array<uint8_t, BYTES_PER_BLOCK> data_buffer;
@@ -181,13 +124,56 @@ int PathOramClient::fetch_branch(uint16_t leaf_id)
 		}
 		branch[i] = Block(leaf_ids[i], data_buffer);
 	}
+	std::cout << "client: recv " << num_blocks << " blocks\n";
 
 	return 0;
 }
 
+inline void PathOramClient::traverse_branch(uint16_t requested_leaf_id, uint16_t rand_leaf_id, enum Operation op, std::array<uint8_t, BYTES_PER_BLOCK> &value)
+{
+	for (Block &current_block : branch) {
+		uint16_t current_leaf_id = current_block.get_leaf_id();
+		if (current_leaf_id == 0)
+			continue;
+
+		if (current_leaf_id == requested_leaf_id) {
+			if (op == READ)
+				std::copy(current_block.get_data().begin(), current_block.get_data().end(), value.begin());
+			else // if (op == WRITE)
+				std::copy(value.begin(), value.end(), current_block.get_data().begin());
+			uint16_t idx = find_intersection_bucket(current_leaf_id, rand_leaf_id);
+			std::cout << "client: found leaf_id " << requested_leaf_id << ", randomized to id " << rand_leaf_id << ", bucket idx " << idx << '\n';
+			long j;
+			for (j = (idx + 1) * BLOCKS_PER_BUCKET - 1; j >= 0; --j) {
+				if (branch[j].get_leaf_id() == 0) {
+					swap_blocks(current_block, branch[j]);
+					return;
+				}
+			}
+			if (j == -1) {
+				// store in branch
+				// free branch[i]
+			}
+		} else {
+			uint16_t idx = find_intersection_bucket(current_leaf_id, requested_leaf_id);
+			long j;
+			for (j = idx * BLOCKS_PER_BUCKET; j < (idx + 1) * BLOCKS_PER_BUCKET; ++j) {
+				if (branch[j].get_leaf_id() == 0) {
+					swap_blocks(current_block, branch[j]);
+					break;
+				}
+			}
+			if (j == (idx + 1) * BLOCKS_PER_BUCKET) {
+				// store in stash
+				// free branch[i]
+			}
+		}
+	}
+}
+
 uint16_t PathOramClient::find_intersection_bucket(uint16_t leaf_id_1, uint16_t leaf_id_2)
 {
-	// returns the index of the lowest intersecting bucket
+	// returns the index (0) of the lowest intersecting bucket
 	uint16_t idx = branch.size() / BLOCKS_PER_BUCKET - 1;
 	--leaf_id_1;
 	--leaf_id_2;
@@ -217,7 +203,7 @@ int PathOramClient::send_branch()
 			return -1;
 		}
 	}
-	std::cout << "client: sent " << branch.size() << " updated leaf_ids to server\n";
+	std::cout << "client: sent " << branch.size() << " updated leaf_ids\n";
 
 	for (Block &block : branch) {
 		if (send(socket_fd, block.get_data().data(), BYTES_PER_BLOCK, 0) != BYTES_PER_BLOCK) {
@@ -226,6 +212,6 @@ int PathOramClient::send_branch()
 		}
 	}
 
-	std::cout << "client: sent " << branch.size() << " updated blocks to server\n";
+	std::cout << "client: sent " << branch.size() << " updated blocks\n";
 	return 0;
 }
