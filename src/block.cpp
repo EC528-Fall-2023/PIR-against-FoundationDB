@@ -17,7 +17,7 @@ uint16_t Block::get_leaf_id()
 	return leaf_id;
 }
 
-std::array<uint8_t, BYTES_PER_BLOCK> Block::get_data()
+std::array<uint8_t, BYTES_PER_BLOCK> &Block::get_data()
 {
 	return data;
 }
