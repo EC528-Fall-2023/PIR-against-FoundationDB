@@ -1,7 +1,4 @@
 #include "client.h"
-#include "bucket.h"
-#include "block.h"
-#include <algorithm>
 
 static std::random_device generator;
 static std::uniform_int_distribution<int> oram_random(1, 32768); // [1, 2^15]
@@ -13,7 +10,6 @@ PathOramClient::PathOramClient(const std::string &server_ip, const int port)
 		exit(EXIT_FAILURE);
 	}
 
-	struct sockaddr_in server_addr;
 	server_addr.sin_family = AF_INET;
 	server_addr.sin_port = htons(port);
 
@@ -22,14 +18,6 @@ PathOramClient::PathOramClient(const std::string &server_ip, const int port)
 		//close(socket_fd);
 		exit(EXIT_FAILURE);
 	}
-
-	int status;
-	if ( (status = connect(socket_fd, (struct sockaddr *) &server_addr, sizeof(server_addr))) < 0 ) {
-		printf("connect: failed\n");
-		//close(socket_fd);
-		exit(EXIT_FAILURE);
-	}
-	std::cout << "client: connection established\n";
 }
 
 PathOramClient::~PathOramClient()
@@ -55,23 +43,56 @@ int PathOramClient::get(const std::string &key_name, std::array<uint8_t, BYTES_P
 	uint16_t rand_leaf_id = oram_random(generator);
 	position_map[key_name] = rand_leaf_id;
 
+	if (connect(socket_fd, (struct sockaddr *) &server_addr, sizeof(server_addr)) < 0 ) {
+		printf("client: connect: failed\n");
+		return -1;
+	}
+	std::cout << "client: connection established\n";
+
+	uint16_t request_id = oram_random(generator);
+	if (send(socket_fd, &request_id, sizeof(request_id), 0) != sizeof(request_id)) {
+		std::cerr << "client: send: failed\n";
+		close(socket_fd);
+		return -1;
+	}
+	std::cout << "client: request_id = " << request_id << '\n';
+
 	if (fetch_branch(requested_leaf_id) == -1) {
 		std::cerr << "client: fetch_branch: failed" << std::endl;
-		exit(EXIT_FAILURE);
+		close(socket_fd);
+		return -1;
 	}
 
 	// decrypt branch if encrypted
 
 	// perform swaps
-	traverse_branch(requested_leaf_id, rand_leaf_id, READ, value);
+	std::array<uint8_t, BYTES_PER_BLOCK> value_buffer = {0};
+	traverse_branch(requested_leaf_id, rand_leaf_id, READ, value_buffer);
 
 	// encrypt branch
 
 	// send branch back
 	if (send_branch() == -1) {
 		std::cerr << "client: send_branch: failed\n";
-		exit(EXIT_FAILURE);
+		close(socket_fd);
+		return -1;
 	}
+
+	// confirm the operation completed
+	uint16_t confirmation_id = 0;
+	if (recv(socket_fd, &confirmation_id, sizeof(confirmation_id), 0) != sizeof(confirmation_id) || confirmation_id != request_id) {
+		std::cerr << "client: recv: failed\n";
+		close(socket_fd);
+		return -1;
+	}
+
+	std::cout << "client: GET SUCCESS\n";
+	memcpy(value.data(), value_buffer.data(), BYTES_PER_BLOCK);
+
+	close(socket_fd);
+	std::cout << "client: disconnected\n";
+	socket_fd = -1;
+	branch.clear();
 
 	return 0;
 }
@@ -129,7 +150,7 @@ int PathOramClient::fetch_branch(uint16_t leaf_id)
 	return 0;
 }
 
-inline void PathOramClient::traverse_branch(uint16_t requested_leaf_id, uint16_t rand_leaf_id, enum Operation op, std::array<uint8_t, BYTES_PER_BLOCK> &value)
+inline void PathOramClient::traverse_branch(uint16_t requested_leaf_id, uint16_t rand_leaf_id, enum Operation op, std::array<uint8_t, BYTES_PER_BLOCK> &value_buffer)
 {
 	for (Block &current_block : branch) {
 		uint16_t current_leaf_id = current_block.get_leaf_id();
@@ -138,9 +159,9 @@ inline void PathOramClient::traverse_branch(uint16_t requested_leaf_id, uint16_t
 
 		if (current_leaf_id == requested_leaf_id) {
 			if (op == READ)
-				std::copy(current_block.get_data().begin(), current_block.get_data().end(), value.begin());
+				std::copy(current_block.get_data().begin(), current_block.get_data().end(), value_buffer.begin());
 			else // if (op == WRITE)
-				std::copy(value.begin(), value.end(), current_block.get_data().begin());
+				std::copy(value_buffer.begin(), value_buffer.end(), current_block.get_data().begin());
 			uint16_t idx = find_intersection_bucket(current_leaf_id, rand_leaf_id);
 			std::cout << "client: found leaf_id " << requested_leaf_id << ", randomized to id " << rand_leaf_id << ", bucket idx " << idx << '\n';
 			long j;
@@ -196,12 +217,13 @@ inline void PathOramClient::swap_blocks(Block &block1, Block &block2)
 
 int PathOramClient::send_branch()
 {
-	for (Block &block : branch) {
-		uint16_t leaf_id = block.get_leaf_id();
-		if (send(socket_fd, &leaf_id, sizeof(leaf_id), 0) != sizeof(leaf_id)) {
-			std::cerr << "send: failed\n";
-			return -1;
-		}
+	std::vector<uint16_t> leaf_ids (branch.size(), 0);
+	for (int i = 0; i < leaf_ids.size(); ++i) {
+		leaf_ids[i] = branch[i].get_leafid();
+	}
+	if (send(socket_fd, &leaf_ids.data(), sizeof(uint16_t) * leaf_ids.size(), 0) != sizeof(leaf_id) * leaf_ids.size()) {
+		std::cerr << "send: failed\n";
+		return -1;
 	}
 	std::cout << "client: sent " << branch.size() << " updated leaf_ids\n";
 

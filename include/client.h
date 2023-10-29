@@ -1,7 +1,7 @@
 #ifndef PORAM_CLIENT_H
 #define PORAM_CLIENT_H
 
-#include "block.h"
+#include "poram.h"
 #include <unistd.h>
 #include <iostream>
 #include <cstring>
@@ -9,6 +9,7 @@
 #include <vector>
 #include <map>
 #include <random>
+#include <algorithm>
 #include <sys/socket.h>
 #include <arpa/inet.h>
 
@@ -45,6 +46,7 @@ private:
 	int send_branch();
 
 	int socket_fd;
+	struct sockaddr_in server_addr;
 	std::map<std::string, uint16_t> position_map;
 	std::vector<Block> branch;
 	std::vector<Block> stash;
