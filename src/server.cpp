@@ -19,7 +19,9 @@ inline int setup_socket(int &server_socket, struct sockaddr_in &address);
 inline int setup_fdb(pthread_t &network_thread);
 inline int get_branch_indexes(std::vector<uint16_t> &branch_indexes, uint16_t leaf_id);
 inline int get_branch_from_fdb(std::vector<Block> &branch, std::vector<uint16_t> &branch_indexes);
-inline int send_branch(std::vector<Block> &branch);
+inline int send_branch_to_client(std::vector<Block> &branch);
+inline int receive_updated_blocks(std::vector<Block> &branch);
+inline int send_branch_to_fdb(std::vector<Block> &branch, std::vector<uint16_t> &branch_indexes);
 inline void close_connection();
 
 void *run_network(void *arg)
@@ -36,7 +38,7 @@ struct FDB_database *db = NULL;
 struct FDB_transaction *tr = NULL;
 struct FDB_future *status = NULL;
 
-int main(int argc, char **argv)
+int main()
 {
 	int server_socket;
 	struct sockaddr_in server_addr, client_addr;
@@ -72,9 +74,9 @@ int main(int argc, char **argv)
 			std::cerr << "server: accept: failed\n";
 			continue;
 		}
-		char str[INET_ADDRSTRLEN] = {0};
-		inet_ntop(AF_INET, &client_addr.sin_addr, str, INET_ADDRSTRLEN);
-		std::cout << "server: connection to " << str << " established\n";
+		char client_ip[INET_ADDRSTRLEN] = {0};
+		inet_ntop(AF_INET, &client_addr.sin_addr, client_ip, INET_ADDRSTRLEN);
+		std::cout << "server: connection to " << client_ip << " established\n";
 
 		// receive request_id
 		uint16_t request_id;
@@ -120,35 +122,25 @@ int main(int argc, char **argv)
 		}
 		std::cout << "server: retrieved branch from fdb\n";
 
-		if (send_branch(branch) != 0) {
-			std::cerr << "server: send_branch: failed\n";
+		if (send_branch_to_client(branch) != 0) {
+			std::cerr << "server: send_branch_to_clien: failed\n";
 			close_connection();
 			continue;
 		}
 
-		// receive + update all leaf_id from branch
-		std::vector<uint16_t> leaf_ids(num_blocks, 0);
-		if (recv(client_socket, leaf_ids.data(), sizeof(uint16_t) * num_blocks, 0) != sizeof(uint16_t) * num_blocks) {
-			std::cerr << "server: recv: failed\n";
+		// receive updated blocks from client
+		if (receive_updated_blocks(branch) != 0) {
+			std::cerr << "server: receive_updated_blocks: failed\n";
 			close_connection();
 			continue;
 		}
-		for (int i = 0; i < num_blocks; ++i) {
-			block[i].set_leaf_id(leaf_ids[i]);
-		}
-		std::cout << "server: recv updated leaf_ids\n";
 
-		// receive + update all data from branch
-		for (Block &block : branch) {
-			std::array<uint8_t, BYTES_PER_BLOCK> data_buffer;
-			if (recv(client_socket, data_buffer.data(), BYTES_PER_BLOCK, 0) != BYTES_PER_BLOCK) {
-				std::cerr << "server: recv: failed\n";
-				close_connection();
-				continue;
-			}
-			block.set_data(data_buffer);
+		// send updated blocks to fdb
+		if (send_branch_to_fdb(branch, branch_indexes) != 0) {
+			std::cerr << "server: send_branch_to_fdb: failed\n";
+			close_connection();
+			continue;
 		}
-		std::cout << "server: recv updated data\n";
 
 		// send acknowledgement of successful operation
 		if (send(client_socket, &request_id, sizeof(request_id), 0) != sizeof(request_id)) {
@@ -158,6 +150,7 @@ int main(int argc, char **argv)
 		}
 
 		// print results
+		std::cout << "server: showing " << num_blocks << " blocks, their leaf_ids and first 10 bytes of the data\n";
 		for (unsigned long i = 0; i < branch.size(); ++i) {
 			if (i % 3 == 0)
 				std::cout << "--------------------\n";
@@ -267,9 +260,9 @@ inline int get_branch_from_fdb(std::vector<Block> &branch, std::vector<uint16_t>
 			uint16_t leaf = 1;
 			std::array<uint8_t, (2 + BYTES_PER_BLOCK) * BLOCKS_PER_BUCKET> bucket;
 			bucket.fill(0);
-			memset(bucket.data() + 2 + BYTES_PER_BLOCK, 1, 2 + BYTES_PER_BLOCK);
 			bucket[2 + BYTES_PER_BLOCK] = leaf & 0x00ff;
 			bucket[3 + BYTES_PER_BLOCK] = (leaf & 0xff00) >> 8;
+			memcpy(bucket.data() + 4 + BYTES_PER_BLOCK, "was here", sizeof("was here"));
 			uint16_t *ptr = (uint16_t *)(bucket.data() + 2 + BYTES_PER_BLOCK);
 			std::cout << "LEAF = " << (int) *ptr << '\n';
 			fdb_transaction_set(tr, (uint8_t *) &branch_indexes[1], sizeof(uint16_t), bucket.data(), (2 + BYTES_PER_BLOCK) * BLOCKS_PER_BUCKET);
@@ -323,7 +316,7 @@ inline int get_branch_from_fdb(std::vector<Block> &branch, std::vector<uint16_t>
 	return 0;
 }
 
-inline int send_branch(std::vector<Block> &branch)
+inline int send_branch_to_client(std::vector<Block> &branch)
 {
 	// send all leaf_ids in branch
 	std::vector<uint16_t> leaf_ids(branch.size());
@@ -344,6 +337,68 @@ inline int send_branch(std::vector<Block> &branch)
 		}
 	}
 	std::cout << "server: sent " << branch.size() << " blocks\n";
+
+	return 0;
+}
+
+inline int receive_updated_blocks(std::vector<Block> &branch)
+{
+	// receive all updated leaf_ids
+	std::vector<uint16_t> leaf_ids(branch.size(), 0);
+	if (recv(client_socket, leaf_ids.data(), sizeof(uint16_t) * leaf_ids.size(), 0) != (long int) (sizeof(uint16_t) * leaf_ids.size())) {
+		std::cerr << "server: recv: failed\n";
+		return -1;
+	}
+
+	// receive + update all data from branch
+	for (unsigned long i = 0; i < branch.size(); ++i) {
+		std::array<uint8_t, BYTES_PER_BLOCK> data_buffer;
+		if (recv(client_socket, data_buffer.data(), BYTES_PER_BLOCK, 0) != BYTES_PER_BLOCK) {
+			std::cerr << "server: recv: failed\n";
+			return -1;
+		}
+		branch[i].set_leaf_id(leaf_ids[i]);
+		branch[i].set_data(data_buffer);
+	}
+	std::cout << "server: recv updated leaf_ids\n";
+	std::cout << "server: recv updated data\n";
+
+	return 0;
+}
+
+inline int send_branch_to_fdb(std::vector<Block> &branch, std::vector<uint16_t> &branch_indexes)
+{
+	for (uint16_t current_bucket = 0; current_bucket < branch.size() / BLOCKS_PER_BUCKET; ++current_bucket) {
+		// create transaction
+		if (fdb_database_create_transaction(db, &tr) != 0) {
+			std::cerr << "server: fdb_database_create_transaction: failed\n";
+			return -1;
+		}
+
+		// construct bucket
+		std::array<uint8_t, (sizeof(uint16_t) + BYTES_PER_BLOCK) * BLOCKS_PER_BUCKET> bucket;
+		for (uint8_t current_block = 0; current_block < BLOCKS_PER_BUCKET; ++current_block) {
+			uint16_t temp_leaf_id = branch[current_bucket * BLOCKS_PER_BUCKET + current_block].get_leaf_id();
+			*((uint16_t *) (bucket.data() + current_block * (sizeof(temp_leaf_id) + BYTES_PER_BLOCK))) = temp_leaf_id;
+			memcpy(bucket.data() + sizeof(temp_leaf_id) + current_block * (sizeof(temp_leaf_id) + BYTES_PER_BLOCK), branch[current_bucket * BLOCKS_PER_BUCKET + current_block].get_data().data(), BYTES_PER_BLOCK);
+		}
+
+		// send bucket to fdb
+		fdb_transaction_set(tr, (uint8_t *) &branch_indexes[current_bucket], sizeof(uint16_t), bucket.data(), (sizeof(uint16_t) + BYTES_PER_BLOCK) * BLOCKS_PER_BUCKET);
+		status = fdb_transaction_commit(tr);
+		if ((fdb_future_block_until_ready(status)) != 0) {
+			std::cerr << "server: fdb_future_block_until_ready: failed\n";
+			return -1;
+		}
+		if (fdb_future_get_error(status)) {
+			std::cerr << "server: fdb_future_is_error: its an error...\n";
+			return -1;
+		}
+		fdb_future_destroy(status);
+		fdb_transaction_destroy(tr);
+		status = NULL;
+		tr = NULL;
+	}
 
 	return 0;
 }
