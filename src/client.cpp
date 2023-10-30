@@ -47,7 +47,9 @@ int PathOramClient::get(const std::string &key_name, std::array<uint8_t, BYTES_P
 		printf("client: connect: failed\n");
 		return -1;
 	}
-	std::cout << "client: connection established\n";
+	char server_ip[INET_ADDRSTRLEN] = {0};
+	inet_ntop(AF_INET, &server_addr.sin_addr, server_ip, INET_ADDRSTRLEN);
+	std::cout << "client: connection to " << server_ip << " established\n";
 
 	uint16_t request_id = oram_random(generator);
 	if (send(socket_fd, &request_id, sizeof(request_id), 0) != sizeof(request_id)) {
@@ -92,7 +94,10 @@ int PathOramClient::get(const std::string &key_name, std::array<uint8_t, BYTES_P
 	close(socket_fd);
 	std::cout << "client: disconnected\n";
 	socket_fd = -1;
-	branch.clear();
+	for (Block &block : branch) {
+		block.set_leaf_id(0);
+		memset(block.get_data().data(), 0, BYTES_PER_BLOCK);
+	}
 
 	return 0;
 }
@@ -218,10 +223,10 @@ inline void PathOramClient::swap_blocks(Block &block1, Block &block2)
 int PathOramClient::send_branch()
 {
 	std::vector<uint16_t> leaf_ids (branch.size(), 0);
-	for (int i = 0; i < leaf_ids.size(); ++i) {
-		leaf_ids[i] = branch[i].get_leafid();
+	for (unsigned long i = 0; i < leaf_ids.size(); ++i) {
+		leaf_ids[i] = branch[i].get_leaf_id();
 	}
-	if (send(socket_fd, &leaf_ids.data(), sizeof(uint16_t) * leaf_ids.size(), 0) != sizeof(leaf_id) * leaf_ids.size()) {
+	if (send(socket_fd, leaf_ids.data(), sizeof(uint16_t) * leaf_ids.size(), 0) != (long int) (sizeof(uint16_t) * leaf_ids.size())) {
 		std::cerr << "send: failed\n";
 		return -1;
 	}
