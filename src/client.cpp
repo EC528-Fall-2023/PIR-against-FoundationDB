@@ -1,7 +1,10 @@
 #include "client.h"
+#include <algorithm>
+#define STASH_SIZE_LIMIT = 300 // Arbitrary value
 
 static std::random_device generator;
 static std::uniform_int_distribution<int> oram_random(1, 32768); // [1, 2^15]
+std::vector<Block> stash;
 
 PathOramClient::PathOramClient(const std::string &server_ip, const int port)
 {
@@ -179,6 +182,15 @@ inline void PathOramClient::traverse_branch(uint16_t requested_leaf_id, uint16_t
 			if (j == -1) {
 				// store in branch
 				// free branch[i]
+
+				if (stash.size() < STASH_SIZE_LIMIT) {
+                    stash.push_back(current_block);
+                } else {
+				// make a process to make room in stash
+
+				}
+                current_block.set_leaf_id(0);
+                // need to implement stash handling logic as needed
 			}
 		} else {
 			uint16_t idx = find_intersection_bucket(current_leaf_id, requested_leaf_id);
@@ -192,6 +204,10 @@ inline void PathOramClient::traverse_branch(uint16_t requested_leaf_id, uint16_t
 			if (j == (idx + 1) * BLOCKS_PER_BUCKET) {
 				// store in stash
 				// free branch[i]
+
+				 stash.push_back(current_block);
+                 current_block.set_leaf_id(0);
+                // Implement stash handling logic as needed
 			}
 		}
 	}
@@ -222,15 +238,21 @@ inline void PathOramClient::swap_blocks(Block &block1, Block &block2)
 
 int PathOramClient::send_branch()
 {
-	std::vector<uint16_t> leaf_ids (branch.size(), 0);
-	for (unsigned long i = 0; i < leaf_ids.size(); ++i) {
+	std::vector<uint16_t> leaf_ids (branch.size() + stash.size(), 0);
+	for (unsigned long i = 0; i < branch.size(); ++i) {// changed to branch
 		leaf_ids[i] = branch[i].get_leaf_id();
 	}
+
+	for (unsigned long i = 0; i < stash.size(); ++i){
+		leaf_ids[branch.size() + 1] = stash[i].get_leaf_id();
+	}
+
 	if (send(socket_fd, leaf_ids.data(), sizeof(uint16_t) * leaf_ids.size(), 0) != (long int) (sizeof(uint16_t) * leaf_ids.size())) {
 		std::cerr << "send: failed\n";
 		return -1;
 	}
 	std::cout << "client: sent " << branch.size() << " updated leaf_ids\n";
+
 
 	for (Block &block : branch) {
 		if (send(socket_fd, block.get_data().data(), BYTES_PER_BLOCK, 0) != BYTES_PER_BLOCK) {
@@ -239,6 +261,63 @@ int PathOramClient::send_branch()
 		}
 	}
 
+	// sending block data from stash
+	for (Block &block : stash) {
+		if (send(socket_fd, block.get_data().data(), BYTES_PER_BLOCK, 0) != BYTES_PER_BLOCK) {
+			std::cerr << "send: failed\n";
+			return -1;
+		}
+	}
 	std::cout << "client: sent " << branch.size() << " updated blocks\n";
 	return 0;
+}
+
+Block PathOramClient::fetch_from_stash(uint16_t leaf_id) {
+    std::vector<Block>::iterator it = stash.begin(); // use iterator 
+    
+    while (it != stash.end()) {
+        if (it->get_leaf_id() == leaf_id) {
+            
+            Block fetched_block = *it; // Block being found in the stash
+            stash.erase(it); // Remove the block from the stash- since its no longer in stash
+
+            return fetched_block;
+        }
+        ++it;
+    }
+
+    return Block(0, {}); // return an empty block if not found
+}
+
+void PathOramClient::send_stash_to_server() {
+    for (const Block &block : stash) {
+        if (send_block_to_server(block) == -1) { // need to make block to server 
+           
+        }
+    }
+
+    stash.clear(); // clear the stash after sending to server
+}
+
+int PathOramClient::send_block_to_server(const Block &block) {
+    if (send(socket_fd, block.get_data().data(), BYTES_PER_BLOCK, 0) != BYTES_PER_BLOCK) {
+        return -1; // for failure
+    }
+    return 0;
+}
+
+void PathOramClient::add_to_stash(Block block) {
+    if (stash.size() < STASH_SIZE_LIMIT) {
+        stash.push_back(block);// If stash is not full, so add the block directly
+    } else {
+        if (!stash.empty()) {
+            Block evicted_block = stash.front();
+            stash.erase(stash.begin());
+
+            // Send the evicted block back to the server
+            send_block_to_server(evicted_block);
+        }
+
+        stash.push_back(block); // Add the new block to the stash
+    }
 }
