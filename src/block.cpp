@@ -1,9 +1,19 @@
 #include "block.h"
 
+static std::random_device generator;
+static std::uniform_int_distribution<uint8_t> random_byte(0x00, 0xFF);
+
 Block::Block()
 {
 	leaf_id = 0;
-	// data = random
+	for (uint8_t &byte: data) {
+		byte = random_byte(generator);
+	}
+}
+
+Block::Block(const Block &block) {
+	this->leaf_id = block.leaf_id;
+	this->data = block.data;
 }
 
 Block::Block(uint16_t leaf_id, const std::array<uint8_t, BYTES_PER_BLOCK>& data)
@@ -32,3 +42,9 @@ void Block::set_data(const std::array<uint8_t, BYTES_PER_BLOCK>& data)
 	this->data = data;
 }
 
+void Block::set_random_data()
+{
+	for (uint8_t &byte: data) {
+		byte = random_byte(generator);
+	}
+}
