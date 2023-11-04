@@ -25,14 +25,14 @@ public class ServerStorage {
 	public void set_bucket(int id,Bucket bkt) throws IOException{
         byte[] key = Tuple.from("bucket", id).pack();
         byte[] value = seria.bucketSerializable(bkt);
-        System.out.println("Storing key: " + Arrays.toString(key));
-        System.out.println("Storing value: " + Arrays.toString(value));
+//        System.out.println("Storing key: " + Arrays.toString(key));
+//        System.out.println("Storing value: " + Arrays.toString(value));
         db.run(new Function<Transaction, Void>() {
             public Void apply(Transaction tr) {
                 try {
                     tr.set(key, value);
                     tr.commit().get();
-                    System.out.println("FDB transaction success!");
+//                    System.out.println("FDB transaction success!");
                 } catch (FDBException e) {
                     System.out.println("write bucket " + id + " failed");
                     e.printStackTrace();
@@ -46,6 +46,8 @@ public class ServerStorage {
         byte[] key = Tuple.from("bucket", id).pack();
 
         byte[] result = db.run(tr -> tr.get(key)).get();
+//        System.out.println("Getting key: " + Arrays.toString(key));
+//        System.out.println("Getting value: " + Arrays.toString(result));
 
         if (result != null) {
             return seria.bucketFromSerializable(result);

@@ -45,6 +45,11 @@ public class Server implements ServerInterface {
 				public void completed(AsynchronousSocketChannel serveClientChannel, Void att) {
 					// TODO Auto-generated method stub
 					// start listening for other connections
+					try {
+						System.out.println("Client connected from " + serveClientChannel.getRemoteAddress());
+					} catch (IOException e) {
+						throw new RuntimeException(e);
+					}
 					channel.accept(null, this);
 					// start up a new thread to serve this connection
 					Runnable serializeProcedure = () -> serveClient(serveClientChannel);
@@ -118,6 +123,7 @@ public class Server implements ServerInterface {
 					byte[] pathIdBytes = new byte[4];
 					message.get(pathIdBytes);
 					int pathId = Ints.fromByteArray(pathIdBytes);
+					System.out.println("Received ORAM_READPATH request from client for path " + pathId);
 					// read path
 					byte[] pathBytes = readPath(pathId);
 					serializedResponse = pathBytes;
@@ -136,6 +142,7 @@ public class Server implements ServerInterface {
 					message.get(pathIdBytes);
 					message.get(pathBytes);
 					int pathId = Ints.fromByteArray(pathIdBytes);
+					System.out.println("Received ORAM_WRITEPATH request from client for path " + pathId);
 
 					//synchronize write back path
 					Lock lock = new ReentrantLock();
@@ -176,7 +183,6 @@ public class Server implements ServerInterface {
 	public void initServer() {
 		// TODO Auto-generated method stub
 		// init storage
-		System.out.println("entered init with" + Configs.BUCKET_COUNT);
 		for (int i = 0; i < Configs.BUCKET_COUNT; i++) {
 			Bucket bkt = new Bucket();
 			try {
@@ -195,6 +201,7 @@ public class Server implements ServerInterface {
 
 	@Override
 	public byte[] readPath(int pathID) {
+		System.out.println("Accessed read bucket/path " + pathID);
 		// TODO Auto-generated method stub
 		byte[][] path_bytes = new byte[Configs.HEIGHT][];
 		int count = 0;
@@ -219,11 +226,13 @@ public class Server implements ServerInterface {
 			returnData = Bytes.concat(returnData, path_bytes[i]);
 		}
 		path_bytes = null;
+		System.out.println("Data received for operation: " + Arrays.toString(returnData));
 		return returnData;
 	}
 
 	@Override
 	public void writePath(int pathID, byte[] pathBytes) {
+		System.out.println("Accessed write bucket/path " + pathID);
 		// TODO Auto-generated method stub
 		int startIndex = 0;
 		int bucket_bytes_len = Configs.Z*(Configs.BLOCK_DATA_LEN+4+4);

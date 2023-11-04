@@ -13,6 +13,7 @@ import java.nio.channels.AsynchronousChannelGroup;
 import java.nio.channels.AsynchronousSocketChannel;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Scanner;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -62,14 +63,17 @@ public class Client implements ClientInterface{
 		// TODO Auto-generated method stub
 		ByteBuffer header = MessageUtility.createMessageHeaderBuffer(MessageUtility.ORAM_INIT, 0);
 		byte[] responseBytes = sendAndGetMessage(header, MessageUtility.ORAM_INIT);
-		System.out.println("client INIT server successful!" + responseBytes[0]);
+		System.out.println("client INIT server successful!");
+		System.out.println();
 		responseBytes = null;
 	}
 
 	public byte[] obliviousAccess(int blockIndex, byte[] newData, Operation op){
 		System.out.println("process request "+requestID);
 		requestID++;
-		
+		System.out.println("Block Index: "+ blockIndex);
+		System.out.println("Operation: "+ op);
+
 		byte[] returndata;// return data
 		
 		//get path id
@@ -92,7 +96,8 @@ public class Client implements ClientInterface{
 		//read request
 		else{
 			if(b == null){//didn't find block in stash, return 0
-				returndata = new byte[Configs.BLOCK_DATA_LEN];
+				System.out.println("No block data found!");
+				returndata = null;
 			}else{
 				returndata = b.getData();
 				b = new Block(position_map[blockIndex],blockIndex,b.getData());
@@ -246,25 +251,149 @@ public class Client implements ClientInterface{
 		}
 		return responseBytes;
 	}
+
+	// GET operation: Retrieve data for a specific block
+	public byte[] getBlockData(int blockIndex) {
+		// Call your obliviousAccess method with Operation.READ
+		return obliviousAccess(blockIndex, null, Operation.READ);
+	}
+
+	// PUT operation: Update data for a specific block
+	public void putBlockData(int blockIndex, byte[] newData) {
+		// Call your obliviousAccess method with Operation.WRITE
+		obliviousAccess(blockIndex, newData, Operation.WRITE);
+	}
+
+	// READRANGE operation: Retrieve data for a range of blocks
+	public byte[][] readRange(int startBlockIndex, int endBlockIndex) {
+		byte[][] dataRange = new byte[endBlockIndex - startBlockIndex + 1][];
+		for (int i = startBlockIndex; i <= endBlockIndex; i++) {
+			dataRange[i - startBlockIndex] = getBlockData(i);
+		}
+		return dataRange;
+	}
+
+	// CLEARRANGE operation: Clear data for a range of blocks
+	public void clearRange(int startBlockIndex, int endBlockIndex) {
+		for (int i = startBlockIndex; i <= endBlockIndex; i++) {
+			putBlockData(i, new byte[Configs.BLOCK_DATA_LEN]);
+		}
+	}
 	
 	public static void main(String[] args) {
 		// TODO Auto-generated method stub
 		Client client = new Client();
 		client.initServer();
-		for(int i=0;i<6;i++){
-			byte[] data = new byte[Configs.BLOCK_DATA_LEN];
-			Arrays.fill(data, (byte)i);
-			client.obliviousAccess(i, data, Operation.WRITE);
-		}
-		for(int i=0;i<6;i++){
-			byte[] data = new byte[Configs.BLOCK_DATA_LEN];
-			byte[] returndata = client.obliviousAccess(i, data, Operation.READ);
-			for(int j = 0;j<Configs.BLOCK_DATA_LEN;j++){
-				System.out.print(returndata[i]);
+//		for(int i=0;i<6;i++){
+//			byte[] data = new byte[Configs.BLOCK_DATA_LEN];
+//			Arrays.fill(data, (byte)i);
+//			client.obliviousAccess(i, data, Operation.WRITE);
+//		}
+//		for(int i=0;i<6;i++){
+//			byte[] data = new byte[Configs.BLOCK_DATA_LEN];
+//			byte[] returndata = client.obliviousAccess(i, data, Operation.READ);
+//			for(int j = 0;j<Configs.BLOCK_DATA_LEN;j++){
+//				System.out.print(returndata[i]);
+//			}
+//			System.out.println();
+//		}
+
+//		// PUT operation
+//		byte[] dataToPut = new byte[Configs.BLOCK_DATA_LEN];
+//		Arrays.fill(dataToPut, (byte) 42);
+//		client.putBlockData(0, dataToPut);
+//
+//		// GET operation
+//		byte[] retrievedData = client.getBlockData(1);
+//		System.out.println("Get Operation result: ");
+//		System.out.println(Arrays.toString(retrievedData));
+//
+//		// READRANGE operation
+//		int startBlockIndex = 0;
+//		int endBlockIndex = 5;
+//		byte[][] dataRange = client.readRange(startBlockIndex, endBlockIndex);
+//		System.out.println("ReadRange Operation result: ");
+//		System.out.println(Arrays.toString(dataRange));
+//
+//		// CLEARRANGE operation
+//		client.clearRange(1, 4);
+
+		Scanner scanner = new Scanner(System.in);
+		int operationChoice = -1;
+
+		while (operationChoice != 0) {
+			System.out.println("Choose an operation:");
+			System.out.println("1. PUT");
+			System.out.println("2. GET");
+			System.out.println("3. READRANGE");
+			System.out.println("4. CLEARRANGE");
+			System.out.println("0. Exit");
+			System.out.print("Enter your choice: ");
+
+			try {
+				operationChoice = scanner.nextInt();
+
+				switch (operationChoice) {
+					case 1:
+						// PUT operation
+						System.out.print("Enter block index for PUT operation: ");
+						int blockIndex = scanner.nextInt();
+						System.out.print("Enter data to PUT (as bytes separated by spaces): ");
+						scanner.nextLine(); // Consume the newline character
+						String dataInput = scanner.nextLine();
+						String[] dataValues = dataInput.split(" ");
+						byte[] dataToPut = new byte[Configs.BLOCK_DATA_LEN];
+						for (int i = 0; i < Math.min(dataValues.length, Configs.BLOCK_DATA_LEN); i++) {
+							dataToPut[i] = Byte.parseByte(dataValues[i]);
+						}
+						client.putBlockData(blockIndex, dataToPut);
+						System.out.println("Data was successfully put for specified index!");
+						break;
+					case 2:
+						// GET operation
+						System.out.print("Enter block index for GET operation: ");
+						int getBlockIndex = scanner.nextInt();
+						byte[] retrievedData = client.getBlockData(getBlockIndex);
+						System.out.println("GET Operation result: " + Arrays.toString(retrievedData));
+						System.out.println();
+						break;
+					case 3:
+						// READRANGE operation
+						System.out.print("Enter start block index for READRANGE operation: ");
+						int startBlockIndex = scanner.nextInt();
+						System.out.print("Enter end block index for READRANGE operation: ");
+						int endBlockIndex = scanner.nextInt();
+						byte[][] dataRange = client.readRange(startBlockIndex, endBlockIndex);
+						System.out.println("READRANGE Operation result: " + Arrays.deepToString(dataRange));
+						System.out.println();
+						break;
+					case 4:
+						// CLEARRANGE operation
+						System.out.print("Enter start block index for CLEARRANGE operation: ");
+						int clearStartBlockIndex = scanner.nextInt();
+						System.out.print("Enter end block index for CLEARRANGE operation: ");
+						int clearEndBlockIndex = scanner.nextInt();
+						client.clearRange(clearStartBlockIndex, clearEndBlockIndex);
+						System.out.println("Successfully cleared data for specified range!");
+						break;
+					case 0:
+						// Exit
+						System.out.println("Thanks for using our PathORAM application!");
+						break;
+					default:
+						System.out.println("Invalid choice. Please select a valid operation.");
+						break;
+				}
+			} catch (Exception e) {
+				System.out.println("Invalid input. Please enter a valid operation choice.");
+				scanner.nextLine(); // Consume the remaining newline character
 			}
-			System.out.println();
 		}
+
+		scanner.close();
+
 		client.close();
 	}
 
 }
+

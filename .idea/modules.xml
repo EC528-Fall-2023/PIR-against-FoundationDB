@@ -3,6 +3,7 @@
   <component name="ProjectModuleManager">
     <modules>
       <module fileurl="file://$PROJECT_DIR$/.idea/PIR-against-FoundationDB.iml" filepath="$PROJECT_DIR$/.idea/PIR-against-FoundationDB.iml" />
+      <module fileurl="file://$PROJECT_DIR$/Java_code/PIR-project.iml" filepath="$PROJECT_DIR$/Java_code/PIR-project.iml" />
     </modules>
   </component>
 </project>
