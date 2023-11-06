@@ -10,6 +10,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <sys/time.h>
 
 #define PORT 8080
 
@@ -40,11 +41,16 @@ struct FDB_transaction *tr = NULL;
 struct FDB_future *status = NULL;
 static std::random_device generator;
 static std::uniform_int_distribution<uint8_t> random_byte(0, 0xff);
+bool fdb_is_initialized = false;
 
 int main()
 {
 	int server_socket;
 	struct sockaddr_in server_addr, client_addr;
+
+	struct timeval start_time, end_time;
+	gettimeofday(&start_time, NULL);
+
 	socklen_t client_addr_len = sizeof(client_addr);
 
 	if (setup_socket(server_socket, server_addr) != 0) {
@@ -57,6 +63,13 @@ int main()
 		std::cerr << "setup_fdb: failed\n";
 		exit(EXIT_FAILURE);
 	}
+
+	gettimeofday(&end_time, NULL);
+	time_t elapsed_seconds = end_time.tv_sec - start_time.tv_sec;
+	if (!fdb_is_initialized)
+		std::cout << "server: " << elapsed_seconds << " seconds on first ever initialization\n";
+	else
+		std::cout << "server: " << elapsed_seconds << " seconds on first ever initialization\n";
 
 	while (1) {
 		LISTEN:
@@ -151,7 +164,7 @@ int main()
 			for (unsigned long i = 0; i < branch.size(); ++i) {
 				if (i % 3 == 0)
 					std::cout << "---------------------------\n";
-				std::cout << branch[i].get_leaf_id() << ',' << '\t';
+				std::cout << branch[i].get_block_id() << ',' << '\t';
 				for (int j = 0; j < 10; ++j) {
 					char c = branch[i].get_data()[j];
 					if (c < 32 || c > 126)
@@ -301,8 +314,8 @@ inline int setup_fdb(pthread_t &network_thread)
 			status = NULL;
 			tr = NULL;
 
-			if (tree_index % 1000 == 0)
-				std::cout << tree_index << '\n';
+			if (tree_index % 5000 == 0)
+				std::cout << "server: initialized " << tree_index << " buckets\n";
 		}
 		
 		tr = NULL;
@@ -326,7 +339,7 @@ inline int setup_fdb(pthread_t &network_thread)
 		status = NULL;
 		tr = NULL;
 	}
-
+	fdb_is_initialized = true;
 	return 0;
 }
 
@@ -406,7 +419,7 @@ inline int send_branch_to_client(std::vector<Block> &branch)
 	// send all leaf_ids in branch
 	std::vector<uint16_t> leaf_ids(branch.size());
 	for (unsigned long i = 0; i < branch.size(); ++i) {
-		leaf_ids[i] = branch[i].get_leaf_id();
+		leaf_ids[i] = branch[i].get_block_id();
 	}
 	if (send(client_socket, leaf_ids.data(), sizeof(uint16_t) * leaf_ids.size(), 0) != (long int) (leaf_ids.size() * sizeof(uint16_t))) {
 		std::cerr << "server: send: failed\n";
@@ -442,7 +455,7 @@ inline int receive_updated_blocks(std::vector<Block> &branch)
 			std::cerr << "server: recv: failed\n";
 			return -1;
 		}
-		branch[i].set_leaf_id(leaf_ids[i]);
+		branch[i].set_block_id(leaf_ids[i]);
 		branch[i].set_data(data_buffer);
 	}
 	std::cout << "server: recv updated leaf_ids\n";
@@ -463,7 +476,7 @@ inline int send_branch_to_fdb(std::vector<Block> &branch, std::vector<uint16_t> 
 		// construct bucket
 		std::array<uint8_t, (sizeof(uint16_t) + BYTES_PER_BLOCK) * BLOCKS_PER_BUCKET> bucket;
 		for (uint8_t current_block = 0; current_block < BLOCKS_PER_BUCKET; ++current_block) {
-			uint16_t temp_leaf_id = branch[current_bucket * BLOCKS_PER_BUCKET + current_block].get_leaf_id();
+			uint16_t temp_leaf_id = branch[current_bucket * BLOCKS_PER_BUCKET + current_block].get_block_id();
 			*((uint16_t *) (bucket.data() + current_block * (sizeof(temp_leaf_id) + BYTES_PER_BLOCK))) = temp_leaf_id;
 			//memcpy(bucket.data() + current_block * (sizeof(temp_leaf_id) + BYTES_PER_BLOCK), &temp_leaf_id, sizeof(temp_leaf_id));
 			memcpy(bucket.data() + sizeof(temp_leaf_id) + current_block * (sizeof(temp_leaf_id) + BYTES_PER_BLOCK), branch[current_bucket * BLOCKS_PER_BUCKET + current_block].get_data().data(), BYTES_PER_BLOCK);

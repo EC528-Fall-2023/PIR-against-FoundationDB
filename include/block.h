@@ -12,17 +12,17 @@ class Block {
 public:
 	Block();
 	Block(const Block &block);
-	Block(uint16_t leaf_id, const std::array<uint8_t, BYTES_PER_BLOCK>& data);
+	Block(uint16_t block_id, const std::array<uint8_t, BYTES_PER_BLOCK>& data);
 
-	uint16_t get_leaf_id();
+	uint16_t get_block_id();
 	std::array<uint8_t, BYTES_PER_BLOCK> &get_data();
 
-	void set_leaf_id(uint16_t leaf_id);
+	void set_block_id(uint16_t block_id);
 	void set_data(const std::array<uint8_t, BYTES_PER_BLOCK>& data);
 	void set_random_data();
 
 private:
-	uint16_t leaf_id;
+	uint16_t block_id;
 	std::array<uint8_t, BYTES_PER_BLOCK> data;
 };
 
