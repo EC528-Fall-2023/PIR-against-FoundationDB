@@ -14,15 +14,26 @@ SRC := $(wildcard $(SRC_DIR)/*.cpp)
 OBJ := $(patsubst $(SRC_DIR)/%.cpp,$(OBJ_DIR)/%.o,$(SRC))
 INC := $(wildcard $(INC_DIR)/*.h)
 
-.PHONY: all server single_client_app init clean
+.PHONY: all single_client multiclient init clean
 
-all: server app_single_client init
+all: server single_client multiclient
+
+single_client: server app_single_client
+
+multiclient: server app_multiclient
+#master_client
 
 server: $(OBJ_DIR)/server.o $(OBJ_DIR)/block.o
 	$(CC) $^ /lib64/libfdb_c.so $(LDLIBS) -o $@
 	
 app_single_client: $(OBJ_DIR)/app_single_client.o $(OBJ_DIR)/single_client.o $(OBJ_DIR)/block.o
 	$(CC) $^ $(LDLIBS) -o $@
+
+app_multiclient: $(OBJ_DIR)/app_multiclient.o $(OBJ_DIR)/multiclient.o $(OBJ_DIR)/block.o
+	$(CC) $^ $(LDLIBS) -o $@
+
+#master_client: $(OBJ_DIR)/master_multiclient.o $(OBJ_DIR)/block.o
+#	$(CC) $^ $(LDLIBS) -o $@
 
 init: init_values init_random
 
@@ -42,4 +53,4 @@ $(OBJ_DIR):
 	mkdir $@
 
 clean:
-	rm $(OBJ_DIR)/*.o server app_single_client init_values init_random
+	rm $(OBJ_DIR)/*.o server app_single_client app_multiclient
