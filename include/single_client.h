@@ -18,7 +18,8 @@
 
 enum Operation {
 	READ,
-	WRITE
+	WRITE,
+	CLEAR
 };
 
 class SingleClient {
@@ -34,8 +35,9 @@ public:
 
 	int put(const std::string &key_name, const std::array<uint8_t, BYTES_PER_BLOCK> &value);
 	int get(const std::string &key_name, std::array<uint8_t, BYTES_PER_BLOCK> &value);
+	int clear(const std::string &key_name);
 	int read_range(const std::string &begin_key_name, const std::string &end_key_name, std::vector<std::array<uint8_t, BYTES_PER_BLOCK>> &data);
-//	int clear_range(const std::string &begin_key_name, const std::string &end_key_name);
+	int clear_range(const std::string &begin_key_name, const std::string &end_key_name);
 
 private:
 /*
@@ -43,7 +45,7 @@ private:
 	static SingleClient *instance;
 */
 	int fetch_branch(uint16_t leaf_id);
-	void traverse_branch(uint16_t requested_block_id, enum Operation op, std::array<uint8_t, BYTES_PER_BLOCK> &value);
+	void traverse_branch(uint16_t requested_block_id, enum Operation op, std::array<uint8_t, BYTES_PER_BLOCK> *value);
 	uint16_t find_intersection_bucket(uint16_t leaf_id_1, uint16_t leaf_id_2);
 	void swap_blocks(Block &block1, Block &block2);
 	int send_branch();

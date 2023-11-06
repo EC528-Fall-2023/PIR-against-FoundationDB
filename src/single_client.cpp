@@ -23,7 +23,9 @@ SingleClient::SingleClient(const std::string &server_ip, const int port)
 		printf("client: connect: failed\n");
 		exit(EXIT_FAILURE);
 	}
+#ifdef DEBUG
 	std::cout << "client: connection to " << server_ip << " established\n";
+#endif
 
 	if (access(".oram_state", F_OK) == 0) {
 		int state_fd;
@@ -70,7 +72,9 @@ SingleClient::SingleClient(const std::string &server_ip, const int port)
 SingleClient::~SingleClient()
 {
 	close(socket_fd);
+#ifdef DEBUG
 	std::cout << "client: disconnected\n";
+#endif
 	store_state();
 	// save position map and stash to disk
 }
@@ -96,7 +100,9 @@ int SingleClient::put(const std::string &key_name, const std::array<uint8_t, BYT
 		close(socket_fd);
 		return -1;
 	}
+#ifdef DEBUG
 	std::cout << "client: request_id = " << request_id << '\n';
+#endif
 
 	if (fetch_branch(position_map[requested_block_id]) == -1) {
 		std::cerr << "client: fetch_branch: failed" << std::endl;
@@ -108,7 +114,7 @@ int SingleClient::put(const std::string &key_name, const std::array<uint8_t, BYT
 
 	// perform swaps
 	std::array<uint8_t, BYTES_PER_BLOCK> value_buffer = value;
-	traverse_branch(requested_block_id, WRITE, value_buffer);
+	traverse_branch(requested_block_id, WRITE, &value_buffer);
 
 	// encrypt branch
 
@@ -126,7 +132,9 @@ int SingleClient::put(const std::string &key_name, const std::array<uint8_t, BYT
 		close(socket_fd);
 		return -1;
 	}
+#ifdef DEBUG
 	std::cout << "client: PUT SUCCESS\n";
+#endif
 	branch.clear();
 	store_state();
 
@@ -137,7 +145,9 @@ int SingleClient::put(const std::string &key_name, const std::array<uint8_t, BYT
 int SingleClient::get(const std::string &key_name, std::array<uint8_t, BYTES_PER_BLOCK> &value)
 {
 	if (key_to_block_id.find(key_name) == key_to_block_id.end()) {
-		std::cerr << "key is not in position map\n";
+#ifdef DEBUG
+		std::cout << "key is not in position map\n";
+#endif
 		return -1;
 	}
 
@@ -149,7 +159,9 @@ int SingleClient::get(const std::string &key_name, std::array<uint8_t, BYTES_PER
 		close(socket_fd);
 		return -1;
 	}
+#ifdef DEBUG
 	std::cout << "client: request_id = " << request_id << '\n';
+#endif
 
 	if (fetch_branch(position_map[requested_block_id]) == -1) {
 		std::cerr << "client: fetch_branch: failed" << std::endl;
@@ -161,7 +173,7 @@ int SingleClient::get(const std::string &key_name, std::array<uint8_t, BYTES_PER
 
 	// perform swaps
 	std::array<uint8_t, BYTES_PER_BLOCK> value_buffer = {0};
-	traverse_branch(requested_block_id, READ, value_buffer);
+	traverse_branch(requested_block_id, READ, &value_buffer);
 
 	// encrypt branch
 
@@ -180,8 +192,65 @@ int SingleClient::get(const std::string &key_name, std::array<uint8_t, BYTES_PER
 		return -1;
 	}
 
+#ifdef DEBUG
 	std::cout << "client: GET SUCCESS\n";
+#endif
 	memcpy(value.data(), value_buffer.data(), BYTES_PER_BLOCK);
+	branch.clear();
+	store_state();
+
+	return 0;
+}
+
+int SingleClient::clear(const std::string &key_name)
+{
+	if (key_to_block_id.find(key_name) == key_to_block_id.end())
+		return 0;
+
+	uint16_t requested_block_id = key_to_block_id[key_name];
+	
+	uint16_t request_id = oram_random(generator);
+	if (send(socket_fd, &request_id, sizeof(request_id), 0) != sizeof(request_id)) {
+		std::cerr << "client: send: failed\n";
+		close(socket_fd);
+		return -1;
+	}
+#ifdef DEBUG
+	std::cout << "client: request_id = " << request_id << '\n';
+#endif
+
+	if (fetch_branch(position_map[requested_block_id]) == -1) {
+		std::cerr << "client: fetch_branch: failed" << std::endl;
+		close(socket_fd);
+		return -1;
+	}
+
+	// decrypt branch if encrypted
+
+	// perform swaps
+	traverse_branch(requested_block_id, CLEAR, nullptr);
+
+	// encrypt branch
+
+	// send branch back
+	if (send_branch() == -1) {
+		std::cerr << "client: send_branch: failed\n";
+		close(socket_fd);
+		return -1;
+	}
+
+	// confirm the operation completed
+	uint16_t confirmation_id = 0;
+	if (recv(socket_fd, &confirmation_id, sizeof(confirmation_id), 0) != sizeof(confirmation_id) || confirmation_id != request_id) {
+		std::cerr << "client: recv: failed\n";
+		close(socket_fd);
+		return -1;
+	}
+	position_map.erase(requested_block_id);
+	key_to_block_id.erase(key_name);
+#ifdef DEBUG
+	std::cout << "client: CLEAR SUCCESS\n";
+#endif
 	branch.clear();
 	store_state();
 
@@ -193,29 +262,34 @@ int SingleClient::read_range(const std::string &begin_key_name, const std::strin
 	for (auto map_iterator = key_to_block_id.lower_bound(begin_key_name); map_iterator != key_to_block_id.upper_bound(end_key_name); ++map_iterator) {
 		std::array<uint8_t, BYTES_PER_BLOCK> data_buffer;
 		if (get(map_iterator->first, data_buffer) != 0) {
-			std::cerr << "read_range: failed. " << map_iterator->first << '\n';
+			std::cerr << "client: read_range: failed. " << map_iterator->first << '\n';
 			return -1;
 		}
 		data.push_back(data_buffer);
 	}
 	return 0;
 }
-/*
+
 int SingleClient::clear_range(const std::string &begin_key_name, const std::string &end_key_name)
 {
 	for (auto map_iterator = key_to_block_id.lower_bound(begin_key_name); map_iterator != key_to_block_id.upper_bound(end_key_name); ++map_iterator) {
-		
+		if (clear(map_iterator->first) != 0) {
+			std::cerr << "client: clear_range: failed. " << map_iterator->first << '\n';
+			return -1;
+		}
 	}
 	return 0;
 }
-*/
+
 int SingleClient::fetch_branch(uint16_t leaf_id)
 {
 	if (send(socket_fd, &leaf_id, sizeof(leaf_id), 0) != sizeof(leaf_id)) {
 		std::cerr << "client: send: failed" << std::endl;
 		return -1;
 	}
+#ifdef DEBUG
 	std::cout << "client: sent leaf_id = " << leaf_id << '\n';
+#endif
 
 	uint16_t num_blocks;
 	if (recv(socket_fd, &num_blocks, sizeof(num_blocks), 0) != sizeof(num_blocks)) {
@@ -223,13 +297,16 @@ int SingleClient::fetch_branch(uint16_t leaf_id)
 		return -1;
 	}
 	branch.resize(num_blocks);
+#ifdef DEBUG
 	std::cout << "client: num_blocks = " << num_blocks << '\n';
+#endif
 
 	std::vector<uint16_t> leaf_ids (num_blocks, 0);
 	if (recv(socket_fd, leaf_ids.data(), sizeof(uint16_t) * num_blocks, 0) != (long int) sizeof(uint16_t) * num_blocks) {
 		std::cerr << "client: recv: failed" << std::endl;
 		return -1;
 	}
+#ifdef DEBUG
 	std::cout << "client: leaf_ids =";
 	for (int i = 0; i < num_blocks; ++i) {
 		if (i % BLOCKS_PER_BUCKET == 0)
@@ -237,6 +314,7 @@ int SingleClient::fetch_branch(uint16_t leaf_id)
 		std::cout << ' ' << leaf_ids[i];
 	}
 	std::cout << '\n';
+#endif
 
 	std::array<uint8_t, BYTES_PER_BLOCK> data_buffer;
 	for (uint16_t i = 0; i < num_blocks; ++i) {
@@ -246,12 +324,14 @@ int SingleClient::fetch_branch(uint16_t leaf_id)
 		}
 		branch[i] = Block(leaf_ids[i], data_buffer);
 	}
+#ifdef DEBUG
 	std::cout << "client: recv " << num_blocks << " blocks\n";
+#endif
 
 	return 0;
 }
 
-void SingleClient::traverse_branch(uint16_t requested_block_id, enum Operation op, std::array<uint8_t, BYTES_PER_BLOCK> &value_buffer)
+void SingleClient::traverse_branch(uint16_t requested_block_id, enum Operation op, std::array<uint8_t, BYTES_PER_BLOCK> *value_buffer)
 {
 	for (Block &current_block : branch) {
 		if (current_block.get_block_id() == 0)
@@ -259,13 +339,17 @@ void SingleClient::traverse_branch(uint16_t requested_block_id, enum Operation o
 
 		if (current_block.get_block_id() == requested_block_id) {
 			if (op == READ)
-				std::copy(current_block.get_data().begin(), current_block.get_data().end(), value_buffer.begin());
-			else // if (op == WRITE)
-				std::copy(value_buffer.begin(), value_buffer.end(), current_block.get_data().begin());
+				std::copy(current_block.get_data().begin(), current_block.get_data().end(), value_buffer->begin());
+			else if (op == WRITE)
+				std::copy(value_buffer->begin(), value_buffer->end(), current_block.get_data().begin());
+			else if (op == CLEAR)
+				current_block.set_block_id(0);
 			uint16_t rand_leaf_id = oram_random(generator);
 			uint16_t idx = find_intersection_bucket(position_map[requested_block_id], rand_leaf_id);
 			position_map[requested_block_id] = rand_leaf_id;
+#ifdef DEBUG
 			std::cout << "client: found leaf_id " << requested_block_id << ", randomized to leaf_id " << rand_leaf_id << ", bucket idx " << idx << '\n';
+#endif
 			for (long j = (idx + 1) * BLOCKS_PER_BUCKET - 1; j >= 0; --j) {
 				if (branch[j].get_block_id() == 0) {
 					swap_blocks(current_block, branch[j]);
@@ -276,7 +360,9 @@ void SingleClient::traverse_branch(uint16_t requested_block_id, enum Operation o
 			// free current block
 
 			stash[current_block.get_block_id()] = current_block.get_data();
+#ifdef DEBUG
 			std::cout << "wrote block " << current_block.get_block_id() << " to stash\n";
+#endif
 			current_block.set_block_id(0);
 			current_block.set_random_data();
 			return;
@@ -294,7 +380,9 @@ void SingleClient::traverse_branch(uint16_t requested_block_id, enum Operation o
 			// free current block
 
 			stash[current_block.get_block_id()] = current_block.get_data();
+#ifdef DEBUG
 			std::cout << "wrote block " << current_block.get_block_id() << " to stash\n";
+#endif
 			current_block.set_block_id(0);
 			current_block.set_random_data();
 		}
@@ -305,16 +393,24 @@ void SingleClient::traverse_branch(uint16_t requested_block_id, enum Operation o
 		RESTART:
 		if (current_block->first == requested_block_id) {
 			if (op == READ)
-				std::copy(current_block->second.begin(), current_block->second.end(), value_buffer.begin());
-			else // if (op == WRITE)
-				std::copy(value_buffer.begin(), value_buffer.end(), current_block->second.begin());
+				std::copy(current_block->second.begin(), current_block->second.end(), value_buffer->begin());
+			else if (op == WRITE)
+				std::copy(value_buffer->begin(), value_buffer->end(), current_block->second.begin());
+			else if (op == CLEAR) {
+				stash.erase(current_block);
+				return;
+			}
 			uint16_t rand_leaf_id = oram_random(generator);
 			uint16_t idx = find_intersection_bucket(position_map[requested_block_id], rand_leaf_id);
 			position_map[requested_block_id] = rand_leaf_id;
+#ifdef DEBUG
 			std::cout << "client: found leaf_id in stash" << requested_block_id << ", randomized to leaf_id " << rand_leaf_id << ", bucket idx " << idx << '\n';
+#endif
 			for (long j = (idx + 1) * BLOCKS_PER_BUCKET - 1; j >= 0; --j) {
 				if (branch[j].get_block_id() == 0) {
+#ifdef DEBUG
 					std::cout << "client: moved block " << current_block->first << " from stash to branch\n";
+#endif
 					branch[j] = Block(current_block->first, current_block->second);
 					stash.erase(current_block);
 					break;
@@ -325,7 +421,9 @@ void SingleClient::traverse_branch(uint16_t requested_block_id, enum Operation o
 		uint16_t idx = find_intersection_bucket(position_map[requested_block_id], position_map[current_block->first]);
 		for (long j = idx * BLOCKS_PER_BUCKET; j < (idx + 1) * BLOCKS_PER_BUCKET; ++j) {
 			if (branch[j].get_block_id() == 0) {
+#ifdef DEBUG
 				std::cout << "client: moved block " << current_block->first << " from stash to branch\n";
+#endif
 				branch[j] = Block(current_block->first, current_block->second);
 				current_block = stash.erase(current_block);
 				goto RESTART;
@@ -340,11 +438,11 @@ void SingleClient::traverse_branch(uint16_t requested_block_id, enum Operation o
 	position_map[requested_block_id] = rand_leaf_id;
 	for (long j = (idx + 1) * BLOCKS_PER_BUCKET - 1; j >= 0; --j) {
 		if (branch[j].get_block_id() == 0) {
-			branch[j] = Block(requested_block_id, value_buffer);
+			branch[j] = Block(requested_block_id, *value_buffer);
 			return;
 		}
 	}
-	stash[requested_block_id] = value_buffer;
+	stash[requested_block_id] = *value_buffer;
 }
 
 uint16_t SingleClient::find_intersection_bucket(uint16_t leaf_id_1, uint16_t leaf_id_2)
@@ -381,7 +479,9 @@ int SingleClient::send_branch()
 		std::cerr << "send: failed\n";
 		return -1;
 	}
+#ifdef DEBUG
 	std::cout << "client: sent " << branch.size() << " updated leaf_ids\n";
+#endif
 
 
 	for (Block &block : branch) {
@@ -390,28 +490,11 @@ int SingleClient::send_branch()
 			return -1;
 		}
 	}
+#ifdef DEBUG
 	std::cout << "client: sent " << branch.size() << " updated blocks\n";
+#endif
 	return 0;
 }
-/*
-Block PathOramClient::fetch_from_stash(uint16_t leaf_id) {
-    std::vector<Block>::iterator it = stash.begin(); // use iterator 
-    
-    while (it != stash.end()) {
-        if (it->get_block_id() == leaf_id) {
-            
-            Block fetched_block = *it; // Block being found in the stash
-            stash.erase(it); // Remove the block from the stash- since its no longer in stash
-
-            return fetched_block;
-        }
-        ++it;
-    }
-
-    return Block(0, {}); // return an empty block if not found
-}
-*/
-
 
 void SingleClient::store_state()
 {

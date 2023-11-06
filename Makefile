@@ -1,7 +1,11 @@
 CC := g++
-CFLAGS := -std=c++17 -g -Wall -Wextra -Werror
+CFLAGS = -std=c++17 -Wall -Wextra -Werror
 CPPFLAGS := -Iinclude
 LDLIBS := -lm -lpthread -lrt
+
+ifeq ($(DEBUG), 1)
+	CFLAGS += -g -DDBUG
+endif
 
 SRC_DIR := src
 OBJ_DIR := obj
