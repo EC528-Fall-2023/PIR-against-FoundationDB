@@ -2,11 +2,11 @@
 #include <cstring>
 #include <unistd.h>
 #include <sys/time.h>
-#include "single_client.h"
+#include "multiclient.h"
 
 int main()
 {
-	SingleClient client;
+	MultiClient client;
 	while (1) {
 		struct timeval start_time, end_time;
 		std::string key;
