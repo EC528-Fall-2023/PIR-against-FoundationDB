@@ -2,15 +2,17 @@
 #define PORAM_SINGLE_CLIENT_H
 
 #include "block.h"
-#include <unistd.h>
 #include <iostream>
-#include <fstream>
 #include <cstring>
 #include <string>
 #include <vector>
 #include <map>
+#include <unordered_map>
 #include <random>
 #include <algorithm>
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/stat.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
 
@@ -41,7 +43,7 @@ private:
 	static SingleClient *instance;
 */
 	int fetch_branch(uint16_t leaf_id);
-	void traverse_branch(uint16_t requested_leaf_id, uint16_t rand_leaf_id, enum Operation op, std::array<uint8_t, BYTES_PER_BLOCK> &value);
+	void traverse_branch(uint16_t requested_block_id, enum Operation op, std::array<uint8_t, BYTES_PER_BLOCK> &value);
 	uint16_t find_intersection_bucket(uint16_t leaf_id_1, uint16_t leaf_id_2);
 	void swap_blocks(Block &block1, Block &block2);
 	int send_branch();
@@ -49,10 +51,10 @@ private:
 
 	int socket_fd;
 	struct sockaddr_in server_addr;
-	std::fstream disk_map;
-	std::map<std::string, uint16_t> position_map;
+	std::map<std::string, uint16_t> key_to_block_id;
+	std::unordered_map<uint16_t, uint16_t> position_map;
 	std::vector<Block> branch;
-	std::vector<Block> stash;
+	std::unordered_map<uint16_t, std::array<uint8_t, BYTES_PER_BLOCK>> stash;
 };
 
 #endif /* PORAM_SINGLE_CLIENT_H */

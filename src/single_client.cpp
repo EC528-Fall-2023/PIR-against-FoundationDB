@@ -25,16 +25,45 @@ SingleClient::SingleClient(const std::string &server_ip, const int port)
 	}
 	std::cout << "client: connection to " << server_ip << " established\n";
 
-	disk_map.open(".map", std::fstream::in);
-	if (disk_map.is_open()) {
-		std::string key;
-		int leaf_id;
-		while (disk_map >> key >> leaf_id) {
-			position_map[key] = leaf_id;
+	if (access(".oram_state", F_OK) == 0) {
+		int state_fd;
+		if ( (state_fd = open(".oram_state", O_RDONLY | O_CREAT, 0666)) == -1) {
+			std::cerr << "client: open state: failed " << errno << '\n';
+			exit(EXIT_FAILURE);
 		}
-		disk_map.close();
-	} else {
-		std::cerr << "Failed to open the output file\n";
+
+		std::string key;
+		uint16_t block_id;
+		uint16_t leaf_id;
+		unsigned int size;
+
+		read(state_fd, &size, sizeof(size));
+		for (unsigned int i = 0; i < size; ++i) {
+			key.clear();
+			unsigned int string_size;
+			read(state_fd, &string_size, sizeof(string_size));
+			key.resize(string_size);
+			read(state_fd, key.data(), string_size);
+			read(state_fd, &block_id, sizeof(block_id));
+			key_to_block_id[key] = block_id;
+		}
+
+		read(state_fd, &size, sizeof(size));
+		for (unsigned int i = 0; i < size; ++i) {
+			read(state_fd, &block_id, sizeof(block_id));
+			read(state_fd, &leaf_id, sizeof(leaf_id));
+			position_map[block_id] = leaf_id;
+		}
+
+		read(state_fd, &size, sizeof(size));
+		for (unsigned int i = 0; i < size; ++i) {
+			std::array<uint8_t, BYTES_PER_BLOCK> temp;
+			read(state_fd, &block_id, sizeof(block_id));
+			read(state_fd, temp.data(), BYTES_PER_BLOCK);
+			stash[block_id] = temp;
+		}
+
+		close(state_fd);
 	}
 }
 
@@ -48,12 +77,18 @@ SingleClient::~SingleClient()
 
 int SingleClient::put(const std::string &key_name, const std::array<uint8_t, BYTES_PER_BLOCK> &value)
 {
-	if (position_map.find(key_name) == position_map.end())
-		position_map[key_name] = oram_random(generator);
+	// if key does not exist yet, add new entry
+	if (key_to_block_id.find(key_name) == key_to_block_id.end()) {
+		unsigned long int i;
+		for (i = 1; i <= position_map.size(); ++i) {
+			if (position_map.find(i) == position_map.end())
+				break;
+		}
+		key_to_block_id[key_name] = i;
+		position_map[i] = oram_random(generator);
+	}
 
-	uint16_t requested_leaf_id = position_map[key_name];
-	uint16_t rand_leaf_id = oram_random(generator);
-	position_map[key_name] = rand_leaf_id;
+	uint16_t requested_block_id = key_to_block_id[key_name];
 	
 	uint16_t request_id = oram_random(generator);
 	if (send(socket_fd, &request_id, sizeof(request_id), 0) != sizeof(request_id)) {
@@ -63,7 +98,7 @@ int SingleClient::put(const std::string &key_name, const std::array<uint8_t, BYT
 	}
 	std::cout << "client: request_id = " << request_id << '\n';
 
-	if (fetch_branch(requested_leaf_id) == -1) {
+	if (fetch_branch(position_map[requested_block_id]) == -1) {
 		std::cerr << "client: fetch_branch: failed" << std::endl;
 		close(socket_fd);
 		return -1;
@@ -73,7 +108,7 @@ int SingleClient::put(const std::string &key_name, const std::array<uint8_t, BYT
 
 	// perform swaps
 	std::array<uint8_t, BYTES_PER_BLOCK> value_buffer = value;
-	traverse_branch(requested_leaf_id, rand_leaf_id, WRITE, value_buffer);
+	traverse_branch(requested_block_id, WRITE, value_buffer);
 
 	// encrypt branch
 
@@ -101,14 +136,12 @@ int SingleClient::put(const std::string &key_name, const std::array<uint8_t, BYT
 // TODO: implement first
 int SingleClient::get(const std::string &key_name, std::array<uint8_t, BYTES_PER_BLOCK> &value)
 {
-	if (position_map.find(key_name) == position_map.end()) {
+	if (key_to_block_id.find(key_name) == key_to_block_id.end()) {
 		std::cerr << "key is not in position map\n";
 		return -1;
 	}
 
-	uint16_t requested_leaf_id = position_map[key_name];
-	uint16_t rand_leaf_id = oram_random(generator);
-	position_map[key_name] = rand_leaf_id;
+	uint16_t requested_block_id = key_to_block_id[key_name];
 
 	uint16_t request_id = oram_random(generator);
 	if (send(socket_fd, &request_id, sizeof(request_id), 0) != sizeof(request_id)) {
@@ -118,7 +151,7 @@ int SingleClient::get(const std::string &key_name, std::array<uint8_t, BYTES_PER
 	}
 	std::cout << "client: request_id = " << request_id << '\n';
 
-	if (fetch_branch(requested_leaf_id) == -1) {
+	if (fetch_branch(position_map[requested_block_id]) == -1) {
 		std::cerr << "client: fetch_branch: failed" << std::endl;
 		close(socket_fd);
 		return -1;
@@ -128,7 +161,7 @@ int SingleClient::get(const std::string &key_name, std::array<uint8_t, BYTES_PER
 
 	// perform swaps
 	std::array<uint8_t, BYTES_PER_BLOCK> value_buffer = {0};
-	traverse_branch(requested_leaf_id, rand_leaf_id, READ, value_buffer);
+	traverse_branch(requested_block_id, READ, value_buffer);
 
 	// encrypt branch
 
@@ -157,7 +190,7 @@ int SingleClient::get(const std::string &key_name, std::array<uint8_t, BYTES_PER
 
 int SingleClient::read_range(const std::string &begin_key_name, const std::string &end_key_name, std::vector<std::array<uint8_t, BYTES_PER_BLOCK>> &data)
 {
-	for (auto map_iterator = position_map.lower_bound(begin_key_name); map_iterator != position_map.upper_bound(end_key_name); ++map_iterator) {
+	for (auto map_iterator = key_to_block_id.lower_bound(begin_key_name); map_iterator != key_to_block_id.upper_bound(end_key_name); ++map_iterator) {
 		std::array<uint8_t, BYTES_PER_BLOCK> data_buffer;
 		if (get(map_iterator->first, data_buffer) != 0) {
 			std::cerr << "read_range: failed. " << map_iterator->first << '\n';
@@ -170,7 +203,7 @@ int SingleClient::read_range(const std::string &begin_key_name, const std::strin
 /*
 int SingleClient::clear_range(const std::string &begin_key_name, const std::string &end_key_name)
 {
-	for (auto map_iterator = position_map.lower_bound(begin_key_name); map_iterator != position_map.upper_bound(end_key_name); ++map_iterator) {
+	for (auto map_iterator = key_to_block_id.lower_bound(begin_key_name); map_iterator != key_to_block_id.upper_bound(end_key_name); ++map_iterator) {
 		
 	}
 	return 0;
@@ -218,65 +251,100 @@ int SingleClient::fetch_branch(uint16_t leaf_id)
 	return 0;
 }
 
-inline void SingleClient::traverse_branch(uint16_t requested_leaf_id, uint16_t rand_leaf_id, enum Operation op, std::array<uint8_t, BYTES_PER_BLOCK> &value_buffer)
+void SingleClient::traverse_branch(uint16_t requested_block_id, enum Operation op, std::array<uint8_t, BYTES_PER_BLOCK> &value_buffer)
 {
 	for (Block &current_block : branch) {
-		uint16_t current_leaf_id = current_block.get_leaf_id();
-		if (current_leaf_id == 0)
+		if (current_block.get_block_id() == 0)
 			continue;
 
-		if (current_leaf_id == requested_leaf_id) {
+		if (current_block.get_block_id() == requested_block_id) {
 			if (op == READ)
 				std::copy(current_block.get_data().begin(), current_block.get_data().end(), value_buffer.begin());
 			else // if (op == WRITE)
 				std::copy(value_buffer.begin(), value_buffer.end(), current_block.get_data().begin());
-			current_block.set_leaf_id(rand_leaf_id);
-			uint16_t idx = find_intersection_bucket(current_leaf_id, rand_leaf_id);
-			std::cout << "client: found leaf_id " << requested_leaf_id << ", randomized to id " << rand_leaf_id << ", bucket idx " << idx << '\n';
-			long j;
-			for (j = (idx + 1) * BLOCKS_PER_BUCKET - 1; j >= 0; --j) {
-				if (branch[j].get_leaf_id() == 0) {
+			uint16_t rand_leaf_id = oram_random(generator);
+			uint16_t idx = find_intersection_bucket(position_map[requested_block_id], rand_leaf_id);
+			position_map[requested_block_id] = rand_leaf_id;
+			std::cout << "client: found leaf_id " << requested_block_id << ", randomized to leaf_id " << rand_leaf_id << ", bucket idx " << idx << '\n';
+			for (long j = (idx + 1) * BLOCKS_PER_BUCKET - 1; j >= 0; --j) {
+				if (branch[j].get_block_id() == 0) {
 					swap_blocks(current_block, branch[j]);
 					return;
 				}
 			}
-			if (j == -1) {
-				// store in stash
-				// free current block
+			// store in stash
+			// free current block
 
-				stash.push_back(Block(current_block));
-				current_block.set_leaf_id(0);
-				current_block.set_random_data();
+			stash[current_block.get_block_id()] = current_block.get_data();
+			std::cout << "wrote block " << current_block.get_block_id() << " to stash\n";
+			current_block.set_block_id(0);
+			current_block.set_random_data();
+			return;
+		}
+		uint16_t idx = find_intersection_bucket(position_map[requested_block_id], position_map[current_block.get_block_id()]);
+		long j;
+		for (j = idx * BLOCKS_PER_BUCKET; j < (idx + 1) * BLOCKS_PER_BUCKET; ++j) {
+			if (branch[j].get_block_id() == 0) {
+				swap_blocks(current_block, branch[j]);
+				break;
 			}
-		} else {
-			uint16_t idx = find_intersection_bucket(current_leaf_id, requested_leaf_id);
-			long j;
-			for (j = idx * BLOCKS_PER_BUCKET; j < (idx + 1) * BLOCKS_PER_BUCKET; ++j) {
-				if (branch[j].get_leaf_id() == 0) {
-					swap_blocks(current_block, branch[j]);
+		}
+		if (j == (idx + 1) * BLOCKS_PER_BUCKET) {
+			// store in stash
+			// free current block
+
+			stash[current_block.get_block_id()] = current_block.get_data();
+			std::cout << "wrote block " << current_block.get_block_id() << " to stash\n";
+			current_block.set_block_id(0);
+			current_block.set_random_data();
+		}
+	}
+
+	// look for requested block in the stash
+	for (auto current_block = stash.begin(); current_block != stash.end(); ) {
+		RESTART:
+		if (current_block->first == requested_block_id) {
+			if (op == READ)
+				std::copy(current_block->second.begin(), current_block->second.end(), value_buffer.begin());
+			else // if (op == WRITE)
+				std::copy(value_buffer.begin(), value_buffer.end(), current_block->second.begin());
+			uint16_t rand_leaf_id = oram_random(generator);
+			uint16_t idx = find_intersection_bucket(position_map[requested_block_id], rand_leaf_id);
+			position_map[requested_block_id] = rand_leaf_id;
+			std::cout << "client: found leaf_id in stash" << requested_block_id << ", randomized to leaf_id " << rand_leaf_id << ", bucket idx " << idx << '\n';
+			for (long j = (idx + 1) * BLOCKS_PER_BUCKET - 1; j >= 0; --j) {
+				if (branch[j].get_block_id() == 0) {
+					std::cout << "client: moved block " << current_block->first << " from stash to branch\n";
+					branch[j] = Block(current_block->first, current_block->second);
+					stash.erase(current_block);
 					break;
 				}
 			}
-			if (j == (idx + 1) * BLOCKS_PER_BUCKET) {
-				// store in stash
-				// free current block
-
-				stash.push_back(Block(current_block));
-				current_block.set_leaf_id(0);
-				current_block.set_random_data();
+			return;
+		}
+		uint16_t idx = find_intersection_bucket(position_map[requested_block_id], position_map[current_block->first]);
+		for (long j = idx * BLOCKS_PER_BUCKET; j < (idx + 1) * BLOCKS_PER_BUCKET; ++j) {
+			if (branch[j].get_block_id() == 0) {
+				std::cout << "client: moved block " << current_block->first << " from stash to branch\n";
+				branch[j] = Block(current_block->first, current_block->second);
+				current_block = stash.erase(current_block);
+				goto RESTART;
 			}
 		}
+		++current_block;
 	}
 
 	// if we are putting a new block
-	uint16_t idx = find_intersection_bucket(requested_leaf_id, rand_leaf_id);
-	long j;
-	for (j = (idx + 1) * BLOCKS_PER_BUCKET - 1; j >= 0; --j) {
-		if (branch[j].get_leaf_id() == 0) {
-			branch[j] = Block(rand_leaf_id, value_buffer);
+	uint16_t rand_leaf_id = oram_random(generator);
+	uint16_t idx = find_intersection_bucket(position_map[requested_block_id], rand_leaf_id);
+	position_map[requested_block_id] = rand_leaf_id;
+	for (long j = (idx + 1) * BLOCKS_PER_BUCKET - 1; j >= 0; --j) {
+		if (branch[j].get_block_id() == 0) {
+			branch[j] = Block(requested_block_id, value_buffer);
 			return;
 		}
 	}
+	stash[requested_block_id] = value_buffer;
 }
 
 uint16_t SingleClient::find_intersection_bucket(uint16_t leaf_id_1, uint16_t leaf_id_2)
@@ -296,9 +364,9 @@ uint16_t SingleClient::find_intersection_bucket(uint16_t leaf_id_1, uint16_t lea
 inline void SingleClient::swap_blocks(Block &block1, Block &block2)
 {
 	Block temp = block1;
-	block1.set_leaf_id(block2.get_leaf_id());
+	block1.set_block_id(block2.get_block_id());
 	block1.set_data(block2.get_data());
-	block2.set_leaf_id(temp.get_leaf_id());
+	block2.set_block_id(temp.get_block_id());
 	block2.set_data(temp.get_data());
 }
 
@@ -306,7 +374,7 @@ int SingleClient::send_branch()
 {
 	std::vector<uint16_t> leaf_ids (branch.size(), 0);
 	for (unsigned long i = 0; i < leaf_ids.size(); ++i) {// changed to branch
-		leaf_ids[i] = branch[i].get_leaf_id();
+		leaf_ids[i] = branch[i].get_block_id();
 	}
 
 	if (send(socket_fd, leaf_ids.data(), sizeof(uint16_t) * leaf_ids.size(), 0) != (long int) (sizeof(uint16_t) * leaf_ids.size())) {
@@ -330,7 +398,7 @@ Block PathOramClient::fetch_from_stash(uint16_t leaf_id) {
     std::vector<Block>::iterator it = stash.begin(); // use iterator 
     
     while (it != stash.end()) {
-        if (it->get_leaf_id() == leaf_id) {
+        if (it->get_block_id() == leaf_id) {
             
             Block fetched_block = *it; // Block being found in the stash
             stash.erase(it); // Remove the block from the stash- since its no longer in stash
@@ -347,13 +415,35 @@ Block PathOramClient::fetch_from_stash(uint16_t leaf_id) {
 
 void SingleClient::store_state()
 {
-	disk_map.open(".map", std::fstream::out | std::fstream::trunc);
-	if (disk_map.is_open()) {
-		for (const auto& pair : position_map) {
-			disk_map << pair.first << " " << pair.second << "\n";
+	int state_fd = open(".oram_state", O_WRONLY | O_CREAT | O_TRUNC, 0666);
+	if (state_fd != -1) {
+		unsigned int size;
+
+		size = key_to_block_id.size();
+		write(state_fd, &size, sizeof(size));
+		for (const auto &pair : key_to_block_id) {
+			unsigned int string_size = pair.first.size();
+			write(state_fd, &string_size, sizeof(string_size));
+			write(state_fd, pair.first.data(), string_size);
+			write(state_fd, &pair.second, sizeof(pair.second));
 		}
-		disk_map.close();
+
+		size = position_map.size();
+		write(state_fd, &size, sizeof(size));
+		for (const auto &pair : position_map) {
+			write(state_fd, &pair.first, sizeof(pair.first));
+			write(state_fd, &pair.second, sizeof(pair.second));
+		}
+
+		size = stash.size();
+		write(state_fd, &size, sizeof(size));
+		for (const auto &pair : stash) {
+			write(state_fd, &pair.first, sizeof(pair.first));
+			write(state_fd, pair.second.data(), BYTES_PER_BLOCK);
+		}
+
+		close(state_fd);
 	} else {
-		std::cerr << "Failed to open the output file\n";
+		std::cerr << "client: failed to open the output file\n";
 	}
 }
