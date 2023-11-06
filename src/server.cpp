@@ -48,8 +48,10 @@ int main()
 	int server_socket;
 	struct sockaddr_in server_addr, client_addr;
 
+#ifdef DEBUG
 	struct timeval start_time, end_time;
 	gettimeofday(&start_time, NULL);
+#endif
 
 	socklen_t client_addr_len = sizeof(client_addr);
 
@@ -64,12 +66,14 @@ int main()
 		exit(EXIT_FAILURE);
 	}
 
+#ifdef DEBUG
 	gettimeofday(&end_time, NULL);
 	time_t elapsed_seconds = end_time.tv_sec - start_time.tv_sec;
 	if (!fdb_is_initialized)
 		std::cout << "server: " << elapsed_seconds << " seconds on first ever initialization\n";
 	else
 		std::cout << "server: " << elapsed_seconds << " seconds on first ever initialization\n";
+#endif
 
 	while (1) {
 		LISTEN:
@@ -79,14 +83,18 @@ int main()
 		}
 		char client_ip[INET_ADDRSTRLEN] = {0};
 		inet_ntop(AF_INET, &client_addr.sin_addr, client_ip, INET_ADDRSTRLEN);
+#ifdef DEBUG
 		std::cout << "server: connection to " << client_ip << " established\n";
+#endif
 
 		while (1) {
 			// receive request_id
 			uint16_t request_id;
 			switch (recv(client_socket, &request_id, sizeof(request_id), 0)) {
 			case 0:
+#ifdef DEBUG
 				std::cout << "server: client disconnected\n";
+#endif
 				goto LISTEN;
 			case sizeof(request_id):
 				break;
@@ -95,7 +103,9 @@ int main()
 				close_connection();
 				goto LISTEN;
 			}
+#ifdef DEBUG
 			std::cout << "server: request_id = " << request_id << '\n';
+#endif
 
 			// receive leaf_id
 			uint16_t leaf_id;
@@ -104,7 +114,9 @@ int main()
 				close_connection();
 				continue;
 			}
+#ifdef DEBUG
 			std::cout << "server: leaf_id = " << leaf_id << '\n';
+#endif
 
 			// contains indexes that correspond to nodes on the branch
 			std::vector<uint16_t> branch_indexes;
@@ -121,7 +133,9 @@ int main()
 				close_connection();
 				continue;
 			}
+#ifdef DEBUG
 			std::cout << "server: sent num_blocks = " << num_blocks << '\n';
+#endif
 
 			// retrieve vector<Block> from fdb
 			std::vector<Block> branch(num_blocks);
@@ -130,7 +144,9 @@ int main()
 				close_connection();
 				continue;
 			}
+#ifdef DEBUG
 			std::cout << "server: retrieved branch from fdb\n";
+#endif
 
 			if (send_branch_to_client(branch) != 0) {
 				std::cerr << "server: send_branch_to_clien: failed\n";
@@ -160,6 +176,7 @@ int main()
 			}
 
 			// print results
+#ifdef DEBUG
 			std::cout << "server: showing " << num_blocks << " blocks, their leaf_ids and first 10 bytes of the data\n";
 			for (unsigned long i = 0; i < branch.size(); ++i) {
 				if (i % 3 == 0)
@@ -173,6 +190,7 @@ int main()
 				}
 				std::cout << '\n';
 			}
+#endif
 		}
 	}
 
@@ -251,25 +269,24 @@ inline int setup_fdb(pthread_t &network_thread)
 	status = fdb_transaction_get(tr, &key, sizeof(key), 0);
 
 	if ((fdb_future_block_until_ready(status)) != 0) {
-		perror("fdb_future_block_until_ready: failed");
+		std::cerr << "fdb_future_block_until_ready: failed\n";
 		return -1;
 	}
 	if (fdb_future_get_error(status)) {
-		perror("fdb_future_is_error: its an error...");
+		std::cerr << "fdb_future_is_error: its an error...\n";
 		return -1;
 	}
 
-	bool initialized = 0;
 	fdb_bool_t out_present = 0;
 	const uint8_t *out_value = NULL;
 	int out_value_length = 0;
 	if (fdb_future_get_value(status, &out_present, &out_value, &out_value_length) == 0) {
 		if (out_present == 0)
-			initialized = 0;
+			fdb_is_initialized = 0;
 		else if (out_value[0] == 1)
-			initialized = 1;
+			fdb_is_initialized = 1;
 		else
-			initialized = 0;
+			fdb_is_initialized = 0;
 	} else {
 		std::cerr << "fdb_future_get_value: failed\n";
 		return -1;
@@ -279,14 +296,14 @@ inline int setup_fdb(pthread_t &network_thread)
 	status = NULL;
 	tr = NULL;
 
-	if (!initialized) {
-		for (uint16_t tree_index = 1; tree_index != 0; ++tree_index) {
-			tr = NULL;
-			if (fdb_database_create_transaction(db, &tr) != 0) {
-				std::cerr << "fdb_database_create_transaction: failed\n";
-				return -1;
-			}
+	if (!fdb_is_initialized) {
+		tr = NULL;
+		if (fdb_database_create_transaction(db, &tr) != 0) {
+			std::cerr << "fdb_database_create_transaction: failed\n";
+			return -1;
+		}
 
+		for (uint16_t tree_index = 1; tree_index != 0; ++tree_index) {
 			uint8_t temp[3] = {0};
 			temp[1] = (tree_index & 0xff00) >> 8;
 			temp[2] = tree_index & 0x00ff;
@@ -299,24 +316,45 @@ inline int setup_fdb(pthread_t &network_thread)
 				memcpy(bucket.data() + (sizeof(leaf_id) + BYTES_PER_BLOCK) * block, &leaf_id, sizeof(leaf_id));
 			}
 			fdb_transaction_set(tr, (const uint8_t *) temp, sizeof(temp), (const uint8_t *) bucket.data(), bucket.size());
-			status = fdb_transaction_commit(tr);
-			if ((fdb_future_block_until_ready(status)) != 0) {
-				std::cerr << "fdb_future_block_until_ready: failed\n";
-				return -1;
-			}
-			int error = fdb_future_get_error(status);
-			if (error != 0) {
-				std::cout << "fdb_future_get_error: " << error << '\n';
-				return -1;
-			}
-			fdb_future_destroy(status);
-			fdb_transaction_destroy(tr);
-			status = NULL;
-			tr = NULL;
 
-			if (tree_index % 5000 == 0)
+			if (tree_index % 2500 == 0) {
+				status = fdb_transaction_commit(tr);
+				if ((fdb_future_block_until_ready(status)) != 0) {
+					std::cerr << "fdb_future_block_until_ready: failed\n";
+					return -1;
+				}
+				int error = fdb_future_get_error(status);
+				if (error != 0) {
+					std::cerr << "fdb_future_get_error: " << error << '\n';
+					return -1;
+				}
+				fdb_future_destroy(status);
+				fdb_transaction_destroy(tr);
+				status = NULL;
+				tr = NULL;
+				if (fdb_database_create_transaction(db, &tr) != 0) {
+					std::cerr << "fdb_database_create_transaction: failed\n";
+					return -1;
+				}
+
+#ifdef DEBUG
 				std::cout << "server: initialized " << tree_index << " buckets\n";
+#endif
+			}
 		}
+		status = fdb_transaction_commit(tr);
+		if ((fdb_future_block_until_ready(status)) != 0) {
+			std::cerr << "fdb_future_block_until_ready: failed\n";
+			return -1;
+		}
+		int error = fdb_future_get_error(status);
+		if (error != 0) {
+			std::cerr << "fdb_future_get_error: " << error << '\n';
+			return -1;
+		}
+		fdb_future_destroy(status);
+		fdb_transaction_destroy(tr);
+		status = NULL;
 		
 		tr = NULL;
 		if (fdb_database_create_transaction(db, &tr) != 0) {
@@ -329,9 +367,9 @@ inline int setup_fdb(pthread_t &network_thread)
 			std::cerr << "fdb_future_block_until_ready: failed\n";
 			return -1;
 		}
-		int error = fdb_future_get_error(status);
+		error = fdb_future_get_error(status);
 		if (error != 0) {
-			std::cout << "fdb_future_get_error: " << error << '\n';
+			std::cerr << "fdb_future_get_error: " << error << '\n';
 			return -1;
 		}
 		fdb_future_destroy(status);
@@ -425,7 +463,9 @@ inline int send_branch_to_client(std::vector<Block> &branch)
 		std::cerr << "server: send: failed\n";
 		return -1;
 	}
+#ifdef DEBUG
 	std::cout << "server: sent leaf_ids\n";
+#endif
 
 	// send all data in branch
 	for (Block &block : branch) {
@@ -434,7 +474,9 @@ inline int send_branch_to_client(std::vector<Block> &branch)
 			return -1;
 		}
 	}
+#ifdef DEBUG
 	std::cout << "server: sent " << branch.size() << " blocks\n";
+#endif
 
 	return 0;
 }
@@ -458,8 +500,10 @@ inline int receive_updated_blocks(std::vector<Block> &branch)
 		branch[i].set_block_id(leaf_ids[i]);
 		branch[i].set_data(data_buffer);
 	}
+#ifdef DEBUG
 	std::cout << "server: recv updated leaf_ids\n";
 	std::cout << "server: recv updated data\n";
+#endif
 
 	return 0;
 }
