@@ -140,7 +140,8 @@ When you want to read the book, you go to the library and request the pages of t
 - Decide on the attack we want to pursue: Our simulated attack must be of a compromised database that can witness access patterns of retrieval by PathORAM
 - Set up the types of analysis needed for the future: Overhead and Security
 4. FBD & PathORAM fully functioning & Basic Attack [11/08/23]
-- Implement client library functions exposed to the user's application (put, get, range\_read, and range\_clear)
+- Implement client library functions exposed to the user's application (put, get, range\_read, and range\_clear) in Java
+- Add Encryption in the code
 - Evaluate the system's performance, focusing on its efficiency, scalability, security, and fix potential bugs
 - Emulate an attack on our PathORAM to test its effectiveness
 - Research the potential of making a resizable ORAM to decide its feasibility
