@@ -145,6 +145,9 @@ To test that our PathORAM has been implimented correctly, we will be creating a 
 
 ### Planned Architecture of the attack
 
+### Planned Architecture
+![Attack Architecture Diagram](images/AttackArchitecture.png)
+
 #### Explanation of the diagram above
 1. Receives an array of queries from client to server (The attack has access to all communications with the server)
 2. Runs a Porter Stemming Algorithm to match keywords with queries
@@ -196,5 +199,6 @@ In the third sprint, we are able to successfully use an open-source PathORAM alg
 ### [Sprint 4](https://youtu.be/k0n5dColuRE)
 #### [Slides for sprint 4](https://docs.google.com/presentation/d/1pp84PhRwiSyWghHc9lZhWW2VgnhMV6PaDHIAit9rQl0/edit?usp=sharing)
 In the fourth sprint we implemented client library functions, started a base of encryption, mapped out an attack, added error handling and state saving, have a proof of concept for multiple clients, and a base for benchmarking
-## 8. References
+## 9. References
 - Stefanov, Emil & van Dijk, Marten & Shi, Elaine & Fletcher, Christopher & Ren, Ling & Yu, Xiangyao & Devadas, Sahana. (2012). Path ORAM: an extremely simple oblivious RAM protocol. Proceedings of the ACM Conference on Computer and Communications Security. 10.1145/2508859.2516660.
+- Mohammad Saiful Islam, Mehmet Kuzu, Murat Kantarcioglu Jonsson School of Engineering and Computer Science The University of Texas at Dallas. Access Pattern disclosure on Searchable Encryption: Ramification, Attack and Mitigation
