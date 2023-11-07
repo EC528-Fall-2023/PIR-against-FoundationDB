@@ -60,8 +60,19 @@ These principal user roles, Sarah and Alex, encompass specific characteristics a
 
 #### Walkthrough Explanation of the above Architectural Structure:
 
-1. Application call get() from PathORAM library since the application wants to retrieve a value from the private information retrival (PIR) system. 
-2. PathORAM client gets the PathORAM node* from the position map data structure, within the client. The PathORAM client stores a data structure called a postion map. The position map, maps each key in the PIR system to a PathORAM node. The PathORAM client gets the PathORAM node for the desired key from the position map.
+1. In our Architecture the user starts with the Application where they have access to the client library and the ability to access FoundationDB
+   - FoundationDB is a key value database
+   - Some of the key functions in the Client library include:
+     - put() : adds a new block or updates an existing block with the given key and value
+     - get() : retrieves a block with the given key
+     - clear() : clears a block with the given key and ensures the block is removed from the server storage and its local mappings
+     - read_range() : reads a range of blocks specifies by a beginning and ending key by returning a vector of blocks representing the data
+     - clear_range() : clears a range of blocks specific by a beginning and ending key
+2.  
+
+
+
+6. PathORAM client gets the PathORAM node* from the position map data structure, within the client. The PathORAM client stores a data structure called a postion map. The position map, maps each key in the PIR system to a PathORAM node. The PathORAM client gets the PathORAM node for the desired key from the position map.
 3. The PathORAM client requests the PathORAM path to the desired PathORAM node from the PathORAM server. The PathORAM path is a sequence of PathORAM nodes that lead to the desired PathORAM node.  
 4. PathORAM Server fetches the data from FoundationDB for each PathORAM node on the path to the desired PathORAM node.
 5. FoundationDB sends the data back to the PathORAM server, which contructs the PathORAM tree. The PathORAM tree is a data structure that represents the relationship between PathORAM nodes
