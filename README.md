@@ -140,15 +140,18 @@ When you want to read the book, you go to the library and request the pages of t
 - Decide on the attack we want to pursue: Our simulated attack must be of a compromised database that can witness access patterns of retrieval by PathORAM
 - Set up the types of analysis needed for the future: Overhead and Security
 4. FBD & PathORAM fully functioning & Basic Attack [11/08/23]
-- Implement client library functions exposed to the user's application (put, get, range\_read, and range\_clear) in Java
+- Implement client library functions exposed to the user's application (put, get, range\_read, and range\_clear)
 - Add Encryption in the Java code
-- Evaluate the system's performance, focusing on its efficiency, scalability, security, and fix potential bugs
-- Emulate an attack on our PathORAM to test its effectiveness
-- Research the potential of making a resizable ORAM to decide its feasibility
-5. Sophisticated Attack Simulation
-- Develop and execute a sophisticated attack on the database to assess the system's resistance to access pattern analysis.
-- Finalize the PathORAM and FDB system 
-6. Security Analysis & Strech Goals
+- Evaluate the system's start up time performance in C++
+- Mapped out how the inference attack will be orchestrated
+- Architected the possibility of multi client PIR system
+- Introduction to stateless client and storing the state locally on a Master client
+5. Sophisticated Attack Simulation [11/22/23]
+- Develop and execute an attack on the database to assess the system's resistance to access pattern analysis.
+- Finalize the PathORAM and FDB system by an array of error handling
+- Include an array of BenchMarks for the PIR system
+- Add encryption using OpenSSL Library
+6. Security Analysis & Stretch Goals
 - Analyze the results of the attack simulation to identify vulnerabilities and potential security improvements.
 - Try to run this on the being able to run PIR against FoundationDB on Massachuttes Open Cloud (MOC)
 
@@ -162,6 +165,8 @@ In the second sprint are in the process of setting up everyones enviornment, deb
 ### [Sprint 3](https://youtu.be/VM-PZuz6tJM)
 #### [Slides for sprint 3](https://docs.google.com/presentation/d/1K-Tt-w3QFmhFGA-8sUNrtf0gfOCyxZMtjJOFLlK04D4/edit?usp=sharing)
 In the third sprint, we are able to successfully use an open-source PathORAM algorithm and enable its connection to FoundationDB, gaining a better understanding on the attack referenced in the paper, pivoting from our original direction in the project by switching to Java and potentially a new environment.
-
+### [Sprint 4](https://youtu.be/k0n5dColuRE)
+#### [Slides for sprint 4](https://docs.google.com/presentation/d/1pp84PhRwiSyWghHc9lZhWW2VgnhMV6PaDHIAit9rQl0/edit?usp=sharing)
+In the fourth sprint we implemented client library functions, started a base of encryption, mapped out an attack, added error handling and state saving, have a proof of concept for multiple clients, and a base for benchmarking
 ## 8. References
 - Stefanov, Emil & van Dijk, Marten & Shi, Elaine & Fletcher, Christopher & Ren, Ling & Yu, Xiangyao & Devadas, Sahana. (2012). Path ORAM: an extremely simple oblivious RAM protocol. Proceedings of the ACM Conference on Computer and Communications Security. 10.1145/2508859.2516660.
