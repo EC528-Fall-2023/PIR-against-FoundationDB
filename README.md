@@ -62,30 +62,34 @@ These principal user roles, Sarah and Alex, encompass specific characteristics a
 
 1. In our Architecture the user starts with the Application where they have access to the client library and the ability to access FoundationDB
    - FoundationDB is a key value database
+   - A request id is generated 
    - Some of the key functions in the Client library include:
      - put() : adds a new block or updates an existing block with the given key and value
      - get() : retrieves a block with the given key
      - clear() : clears a block with the given key and ensures the block is removed from the server storage and its local mappings
      - read_range() : reads a range of blocks specifies by a beginning and ending key by returning a vector of blocks representing the data
-     - clear_range() : clears a range of blocks specific by a beginning and ending key
-2.  
-
-
-
-6. PathORAM client gets the PathORAM node* from the position map data structure, within the client. The PathORAM client stores a data structure called a postion map. The position map, maps each key in the PIR system to a PathORAM node. The PathORAM client gets the PathORAM node for the desired key from the position map.
-3. The PathORAM client requests the PathORAM path to the desired PathORAM node from the PathORAM server. The PathORAM path is a sequence of PathORAM nodes that lead to the desired PathORAM node.  
-4. PathORAM Server fetches the data from FoundationDB for each PathORAM node on the path to the desired PathORAM node.
-5. FoundationDB sends the data back to the PathORAM server, which contructs the PathORAM tree. The PathORAM tree is a data structure that represents the relationship between PathORAM nodes
-6. PathORAM server sends the PathORAM path back to the PathORAM client get() function. 
-7. The PathORAM client preforms the PathORAM shuffling algorithm to mix up the PathORAM path. This prevents the PathORAM server from learning which PathORAM node the clients is trying to access. 
-8. get() returns the value of the key. The PathORAM client returns the value of the key to the application. 
-9. The PathORAM client updates the PathORAM tree after the operation to reflect the changes that were made. 
-
-*node = stores a piece of the private information
+     - clear_range() : clears a range of blocks specific by a beginning and ending key 
+2. From there the client will send the operation request to the Master Client, where the state of the position map and stash are being saved locally, and the clients can remain stateless
+   - Position Map is a data structure that maintains the mapping between the locks of data the client wants to store/retrieve and their actual position in the server storage
+     - each block of data is identified by a block ID and is mapped to a leaf in a binary tree structure, simulated by an array in the server
+     - everytime a block is accessed, its position in the map is randomized again to maintain obliviousness
+   - Stash is a local storage area where the blocks are temporarily held when they are fetched from the server but cannot be written back immediately
+     - A reason why the block cant be written immediately is all the blocks being full, and would stay in the stash until the next write operation
+3. The Master client will receive the request id and will randomly generate a leaf id 
+4. The Master Client will then send the request id and leaf id, sent over the network
+5. The PathORAM Server then receives the two IDs, and uses the leaf id to fetch a branch, a vector of data blocks, that is associated between he lead id and the specific leaf node 
+6. The PathORAM Server fetches the branch from FoundationDB
+7. FoundationDB sends the blocks to the server
+8. The PathORAM Server then sends the master client the leaf id it was received, the blocks of data, and the number of blocks being sent
+9. The Master Client will send do the shuffling among the blocks received, update the position map and stash, and carryout the requested operation and send the data to the client 
+10. The Master Client will then send the shuffled branch back to the PathORAM server 
+11. The PathORAM Server will receive the blocks and send them to FoundationDB to update the database
+12. Once completed, the PathORAM Server will send the request id back to the master client
+13. If the master client receives the request id, then it will send it back to the client and print its successful 
 
 #### In-Depth Explanation of each component within PIR:
 Path ORAM Server (Server):
-- The Path ORAM Server is the component responsible for implementing one part of the Path ORAM algorithm.
+- The Path ORAM Server is the omponent responsible for implementing one part of the Path ORAM algorithm.
 - It stores a binary tree structure full of encrypted data where each node (bucket) contains data blocks, which contains an id.
 - It listens for data requests in a tuple: operation type, leaf node id (leftmost id is 1, rightmost is highest), and the actual data (if write operation). 
 - It returns all of the data from all of the nodes between the root and the leaf with the requested id (the tree branch) back to the client.
