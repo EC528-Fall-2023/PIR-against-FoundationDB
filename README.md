@@ -140,8 +140,21 @@ When you want to read the book, you go to the library and request the pages of t
 - Implementing the server side of PathOram in between the FoundationalDB client and server to compare its performance versus our original solution
 - Being able to run PIR against FoundationDB on Massachuttes Open Cloud (MOC)
 
-## 6. Release Planning
+## 6. Inference Attack Model
+To test that our PathORAM has been implimented correctly, we will be creating a simulated attack of a compromised database, assuming a correct implimentation of the PathORAM algorithm there should not be any data inferred from the attack.
 
+### Planned Architecture of the attack
+
+#### Explanation of the diagram above
+1. Receives an array of queries from client to server (The attack has access to all communications with the server)
+2. Runs a Porter Stemming Algorithm to match keywords with queries
+3. Requests encrypted files
+4. Receives the documents that were able to be decrypted
+
+Within the attack architecture we will store the queries from the requests to FoundationDB along with matrix M. Matrix M is what allows us to reasonably guess the keyword pairs to the queries. To create this matrix we first will find a large publicly available dataset with all the possible keywords we would expect to find in our targeted attack. Matrix M is created to contain all of these keywords along with the expected probability they will appear.
+
+
+## 7. Release Planning
 1. Research and Data Storage R/W [09/27/23]
 - Learning the architecture of the project and how the process as a whole works
 - Two core operations, read and write, be shown to execute with the foundationDB
@@ -170,7 +183,7 @@ When you want to read the book, you go to the library and request the pages of t
 - Analyze the results of the attack simulation to identify vulnerabilities and potential security improvements.
 - Try to run this on the being able to run PIR against FoundationDB on Massachuttes Open Cloud (MOC)
 
-## 7. Videos & Slides
+## 8. Videos & Slides
 ### [Sprint 1](https://drive.google.com/file/d/1mzK61GUkCX3TyAa_z3-Qk02gBIUXeQ1o/view?usp=sharing)
 #### [Slides for sprint 1](https://docs.google.com/presentation/d/1CD8V3PlY5hwEqNEdIvMwRTETA6OSf6MouFY9GTvDByU/edit?usp=sharing)
 In the first sprint we focused on researching and deeply understanding our project as a whole and show a demo regarding writing and reading from the foundationDB
