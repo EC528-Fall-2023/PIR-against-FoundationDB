@@ -56,7 +56,7 @@ These principal user roles, Sarah and Alex, encompass specific characteristics a
 ## 4. Solution Concept
 
 ### Current Architecture
-![Architecture Diagram](images/PIR.drawio.png)
+![Architecture Diagram](images/MultiArch.png)
 
 #### Walkthrough Explanation of the above Architectural Structure:
 
