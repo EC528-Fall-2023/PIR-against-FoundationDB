@@ -19,7 +19,9 @@
 enum Operation {
 	READ,
 	WRITE,
-	CLEAR
+	CLEAR,
+	READ_RANGE,
+	CLEAR_RANGE
 };
 
 class SingleClient {

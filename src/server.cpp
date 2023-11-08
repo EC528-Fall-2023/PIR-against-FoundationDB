@@ -72,7 +72,7 @@ int main()
 	if (!fdb_is_initialized)
 		std::cout << "server: " << elapsed_seconds << " seconds on first ever initialization\n";
 	else
-		std::cout << "server: " << elapsed_seconds << " seconds on first ever initialization\n";
+		std::cout << "server: " << elapsed_seconds << " seconds on initialization\n";
 #endif
 
 	while (1) {
@@ -282,11 +282,11 @@ inline int setup_fdb(pthread_t &network_thread)
 	int out_value_length = 0;
 	if (fdb_future_get_value(status, &out_present, &out_value, &out_value_length) == 0) {
 		if (out_present == 0)
-			fdb_is_initialized = 0;
+			fdb_is_initialized = false;
 		else if (out_value[0] == 1)
-			fdb_is_initialized = 1;
+			fdb_is_initialized = true;
 		else
-			fdb_is_initialized = 0;
+			fdb_is_initialized = false;
 	} else {
 		std::cerr << "fdb_future_get_value: failed\n";
 		return -1;
@@ -317,7 +317,7 @@ inline int setup_fdb(pthread_t &network_thread)
 			}
 			fdb_transaction_set(tr, (const uint8_t *) temp, sizeof(temp), (const uint8_t *) bucket.data(), bucket.size());
 
-			if (tree_index % 2500 == 0) {
+			if (tree_index % 3000 == 0) {
 				status = fdb_transaction_commit(tr);
 				if ((fdb_future_block_until_ready(status)) != 0) {
 					std::cerr << "fdb_future_block_until_ready: failed\n";
