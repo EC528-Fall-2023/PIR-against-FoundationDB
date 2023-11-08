@@ -28,7 +28,7 @@ public:
 	MultiClient(const MultiClient&) = delete;
 	MultiClient& operator=(const MultiClient&) = delete;
 */
-	MultiClient(const std::string &server_ip = "127.0.0.1", const int port = 8080);
+	MultiClient(const std::string &server_ip = "127.0.0.1", const int port = 8081);
 	~MultiClient();
 
 	int put(const std::string &key_name, const std::array<uint8_t, BYTES_PER_BLOCK> &value);

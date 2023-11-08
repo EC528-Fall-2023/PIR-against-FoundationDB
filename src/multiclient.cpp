@@ -163,7 +163,7 @@ int MultiClient::send_request(const uint16_t request_id, const uint8_t operation
 		return -1;
 	}
 #ifdef DEBUG
-	std::cout << "client: connection to " << server_ip << " established\n";
+	std::cout << "client: connection to " << server_addr.sin_addr.s_addr << " established\n";
 #endif
 
 	if (send(socket_fd, &request_id, sizeof(request_id), 0) != sizeof(request_id)) {
