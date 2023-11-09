@@ -52,4 +52,6 @@ $(OBJ_DIR):
 	mkdir $@
 
 clean:
+	ps aux | grep server
+	ps aux | grep master_client
 	rm $(OBJ_DIR)/*.o server app_single_client app_multiclient master_client
