@@ -493,7 +493,7 @@ inline int receive_updated_blocks(std::vector<Block> &branch)
 	// receive + update all data from branch
 	for (unsigned long i = 0; i < branch.size(); ++i) {
 		std::array<uint8_t, BYTES_PER_BLOCK> data_buffer;
-		if (recv(client_socket, data_buffer.data(), BYTES_PER_BLOCK, 0) != BYTES_PER_BLOCK) {
+		if (recv(client_socket, data_buffer.data(), BYTES_PER_BLOCK, MSG_WAITALL) != BYTES_PER_BLOCK) {
 			perror("server: recv: failed");
 			return -1;
 		}

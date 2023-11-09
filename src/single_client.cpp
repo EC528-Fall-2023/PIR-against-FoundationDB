@@ -317,7 +317,7 @@ int SingleClient::fetch_branch(uint16_t leaf_id)
 
 	std::array<uint8_t, BYTES_PER_BLOCK> data_buffer;
 	for (uint16_t i = 0; i < num_blocks; ++i) {
-		if (recv(socket_fd, data_buffer.data(), BYTES_PER_BLOCK, 0) != BYTES_PER_BLOCK) {
+		if (recv(socket_fd, data_buffer.data(), BYTES_PER_BLOCK, MSG_WAITALL) != BYTES_PER_BLOCK) {
 			perror("single_client: recv: failed");
 			return -1;
 		}
