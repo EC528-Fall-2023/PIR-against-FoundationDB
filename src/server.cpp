@@ -84,7 +84,7 @@ int main()
 		char client_ip[INET_ADDRSTRLEN] = {0};
 		inet_ntop(AF_INET, &client_addr.sin_addr, client_ip, INET_ADDRSTRLEN);
 #ifdef DEBUG
-		std::cout << "server: connection to " << client_ip << " established\n";
+		std::cout << "server: connection to " << client_ip << ':' << PORT << " established\n";
 #endif
 
 		while (1) {
@@ -99,7 +99,7 @@ int main()
 			case sizeof(request_id):
 				break;
 			default:
-				std::cerr << "server: recv: failed\n";
+				perror("server: recv: failed");
 				close_connection();
 				goto LISTEN;
 			}
@@ -110,7 +110,7 @@ int main()
 			// receive leaf_id
 			uint16_t leaf_id;
 			if (recv(client_socket, &leaf_id, sizeof(leaf_id), 0) != sizeof(leaf_id)) {
-				std::cerr << "server: recv: failed\n";
+				perror("server: recv: failed");
 				close_connection();
 				continue;
 			}
@@ -129,7 +129,7 @@ int main()
 			// send number of blocks to send
 			uint16_t num_blocks = branch_indexes.size() * BLOCKS_PER_BUCKET;
 			if (send(client_socket, &num_blocks, sizeof(num_blocks), 0) != sizeof(num_blocks)) {
-				std::cerr << "server: send: failed\n";
+				perror("server: send: failed");
 				close_connection();
 				continue;
 			}
@@ -149,7 +149,7 @@ int main()
 #endif
 
 			if (send_branch_to_client(branch) != 0) {
-				std::cerr << "server: send_branch_to_clien: failed\n";
+				perror("server: send_branch_to_client: failed");
 				close_connection();
 				continue;
 			}
@@ -163,14 +163,14 @@ int main()
 
 			// send updated blocks to fdb
 			if (send_branch_to_fdb(branch, branch_indexes) != 0) {
-				std::cerr << "server: send_branch_to_fdb: failed\n";
+				perror("server: send_branch_to_fdb: failed");
 				close_connection();
 				continue;
 			}
 
 			// send acknowledgement of successful operation
 			if (send(client_socket, &request_id, sizeof(request_id), 0) != sizeof(request_id)) {
-				std::cerr << "server: send: failed acknowledgement\n";
+				perror("server: send: failed acknowledgement");
 				close_connection();
 				continue;
 			}
@@ -460,7 +460,7 @@ inline int send_branch_to_client(std::vector<Block> &branch)
 		leaf_ids[i] = branch[i].get_block_id();
 	}
 	if (send(client_socket, leaf_ids.data(), sizeof(uint16_t) * leaf_ids.size(), 0) != (long int) (leaf_ids.size() * sizeof(uint16_t))) {
-		std::cerr << "server: send: failed\n";
+		perror("server: send: failed");
 		return -1;
 	}
 #ifdef DEBUG
@@ -470,7 +470,7 @@ inline int send_branch_to_client(std::vector<Block> &branch)
 	// send all data in branch
 	for (Block &block : branch) {
 		if (send(client_socket, block.get_data().data(), BYTES_PER_BLOCK, 0) != BYTES_PER_BLOCK) {
-			std::cerr << "server: send: failed\n";
+			perror("server: send: failed");
 			return -1;
 		}
 	}
@@ -486,7 +486,7 @@ inline int receive_updated_blocks(std::vector<Block> &branch)
 	// receive all updated leaf_ids
 	std::vector<uint16_t> leaf_ids(branch.size(), 0);
 	if (recv(client_socket, leaf_ids.data(), sizeof(uint16_t) * leaf_ids.size(), 0) != (long int) (sizeof(uint16_t) * leaf_ids.size())) {
-		std::cerr << "server: recv: failed\n";
+		perror("server: recv: failed");
 		return -1;
 	}
 
@@ -494,7 +494,7 @@ inline int receive_updated_blocks(std::vector<Block> &branch)
 	for (unsigned long i = 0; i < branch.size(); ++i) {
 		std::array<uint8_t, BYTES_PER_BLOCK> data_buffer;
 		if (recv(client_socket, data_buffer.data(), BYTES_PER_BLOCK, 0) != BYTES_PER_BLOCK) {
-			std::cerr << "server: recv: failed\n";
+			perror("server: recv: failed");
 			return -1;
 		}
 		branch[i].set_block_id(leaf_ids[i]);

@@ -47,7 +47,7 @@ private:
 	int confirm_request(const uint16_t request_id);
 
 	int socket_fd;
-	struct sockaddr_in server_addr;
+	struct sockaddr_in master_addr;
 };
 
 #endif /* PORAM_MULTICLIENT_H */

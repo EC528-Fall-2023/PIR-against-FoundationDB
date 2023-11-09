@@ -20,17 +20,17 @@ SingleClient::SingleClient(const std::string &server_ip, const int port)
 	}
 
 	if (connect(socket_fd, (struct sockaddr *) &server_addr, sizeof(server_addr)) < 0 ) {
-		printf("client: connect: failed\n");
+		printf("single_client: connect: failed\n");
 		exit(EXIT_FAILURE);
 	}
 #ifdef DEBUG
-	std::cout << "client: connection to " << server_ip << " established\n";
+	std::cout << "single_client: connection to " << server_ip << ':' << port << " established\n";
 #endif
 
 	if (access(".oram_state", F_OK) == 0) {
 		int state_fd;
 		if ( (state_fd = open(".oram_state", O_RDONLY | O_CREAT, 0666)) == -1) {
-			std::cerr << "client: open state: failed " << errno << '\n';
+			std::cerr << "single_client: open state: failed " << errno << '\n';
 			exit(EXIT_FAILURE);
 		}
 
@@ -73,7 +73,7 @@ SingleClient::~SingleClient()
 {
 	close(socket_fd);
 #ifdef DEBUG
-	std::cout << "client: disconnected\n";
+	std::cout << "single_client: disconnected\n";
 #endif
 	store_state();
 	// save position map and stash to disk
@@ -96,16 +96,16 @@ int SingleClient::put(const std::string &key_name, const std::array<uint8_t, BYT
 	
 	uint16_t request_id = oram_random(generator);
 	if (send(socket_fd, &request_id, sizeof(request_id), 0) != sizeof(request_id)) {
-		std::cerr << "client: send: failed\n";
+		perror("single_client: send: failed");
 		close(socket_fd);
 		return -1;
 	}
 #ifdef DEBUG
-	std::cout << "client: request_id = " << request_id << '\n';
+	std::cout << "single_client: request_id = " << request_id << '\n';
 #endif
 
 	if (fetch_branch(position_map[requested_block_id]) == -1) {
-		std::cerr << "client: fetch_branch: failed" << std::endl;
+		std::cerr << "single_client: fetch_branch: failed" << std::endl;
 		close(socket_fd);
 		return -1;
 	}
@@ -120,7 +120,7 @@ int SingleClient::put(const std::string &key_name, const std::array<uint8_t, BYT
 
 	// send branch back
 	if (send_branch() == -1) {
-		std::cerr << "client: send_branch: failed\n";
+		std::cerr << "single_client: send_branch: failed\n";
 		close(socket_fd);
 		return -1;
 	}
@@ -128,12 +128,12 @@ int SingleClient::put(const std::string &key_name, const std::array<uint8_t, BYT
 	// confirm the operation completed
 	uint16_t confirmation_id = 0;
 	if (recv(socket_fd, &confirmation_id, sizeof(confirmation_id), 0) != sizeof(confirmation_id) || confirmation_id != request_id) {
-		std::cerr << "client: recv: failed\n";
+		perror("single_client: recv: failed");
 		close(socket_fd);
 		return -1;
 	}
 #ifdef DEBUG
-	std::cout << "client: PUT SUCCESS\n";
+	std::cout << "single_client: PUT SUCCESS\n";
 #endif
 	branch.clear();
 	store_state();
@@ -141,7 +141,6 @@ int SingleClient::put(const std::string &key_name, const std::array<uint8_t, BYT
 	return 0;
 }
 
-// TODO: implement first
 int SingleClient::get(const std::string &key_name, std::array<uint8_t, BYTES_PER_BLOCK> &value)
 {
 	if (key_to_block_id.find(key_name) == key_to_block_id.end()) {
@@ -155,16 +154,16 @@ int SingleClient::get(const std::string &key_name, std::array<uint8_t, BYTES_PER
 
 	uint16_t request_id = oram_random(generator);
 	if (send(socket_fd, &request_id, sizeof(request_id), 0) != sizeof(request_id)) {
-		std::cerr << "client: send: failed\n";
+		perror("single_client: send: failed");
 		close(socket_fd);
 		return -1;
 	}
 #ifdef DEBUG
-	std::cout << "client: request_id = " << request_id << '\n';
+	std::cout << "single_client: request_id = " << request_id << '\n';
 #endif
 
 	if (fetch_branch(position_map[requested_block_id]) == -1) {
-		std::cerr << "client: fetch_branch: failed" << std::endl;
+		std::cerr << "single_client: fetch_branch: failed" << std::endl;
 		close(socket_fd);
 		return -1;
 	}
@@ -179,7 +178,7 @@ int SingleClient::get(const std::string &key_name, std::array<uint8_t, BYTES_PER
 
 	// send branch back
 	if (send_branch() == -1) {
-		std::cerr << "client: send_branch: failed\n";
+		std::cerr << "single_client: send_branch: failed\n";
 		close(socket_fd);
 		return -1;
 	}
@@ -187,13 +186,13 @@ int SingleClient::get(const std::string &key_name, std::array<uint8_t, BYTES_PER
 	// confirm the operation completed
 	uint16_t confirmation_id = 0;
 	if (recv(socket_fd, &confirmation_id, sizeof(confirmation_id), 0) != sizeof(confirmation_id) || confirmation_id != request_id) {
-		std::cerr << "client: recv: failed\n";
+		perror("single_client: recv: failed");
 		close(socket_fd);
 		return -1;
 	}
 
 #ifdef DEBUG
-	std::cout << "client: GET SUCCESS\n";
+	std::cout << "single_client: GET SUCCESS\n";
 #endif
 	memcpy(value.data(), value_buffer.data(), BYTES_PER_BLOCK);
 	branch.clear();
@@ -211,16 +210,16 @@ int SingleClient::clear(const std::string &key_name)
 	
 	uint16_t request_id = oram_random(generator);
 	if (send(socket_fd, &request_id, sizeof(request_id), 0) != sizeof(request_id)) {
-		std::cerr << "client: send: failed\n";
+		perror("single_client: send: failed");
 		close(socket_fd);
 		return -1;
 	}
 #ifdef DEBUG
-	std::cout << "client: request_id = " << request_id << '\n';
+	std::cout << "single_client: request_id = " << request_id << '\n';
 #endif
 
 	if (fetch_branch(position_map[requested_block_id]) == -1) {
-		std::cerr << "client: fetch_branch: failed" << std::endl;
+		std::cerr << "single_client: fetch_branch: failed" << std::endl;
 		close(socket_fd);
 		return -1;
 	}
@@ -234,7 +233,7 @@ int SingleClient::clear(const std::string &key_name)
 
 	// send branch back
 	if (send_branch() == -1) {
-		std::cerr << "client: send_branch: failed\n";
+		std::cerr << "single_client: send_branch: failed\n";
 		close(socket_fd);
 		return -1;
 	}
@@ -242,14 +241,14 @@ int SingleClient::clear(const std::string &key_name)
 	// confirm the operation completed
 	uint16_t confirmation_id = 0;
 	if (recv(socket_fd, &confirmation_id, sizeof(confirmation_id), 0) != sizeof(confirmation_id) || confirmation_id != request_id) {
-		std::cerr << "client: recv: failed\n";
+		perror("single_client: recv: failed");
 		close(socket_fd);
 		return -1;
 	}
 	position_map.erase(requested_block_id);
 	key_to_block_id.erase(key_name);
 #ifdef DEBUG
-	std::cout << "client: CLEAR SUCCESS\n";
+	std::cout << "single_client: CLEAR SUCCESS\n";
 #endif
 	branch.clear();
 	store_state();
@@ -262,7 +261,7 @@ int SingleClient::read_range(const std::string &begin_key_name, const std::strin
 	for (auto map_iterator = key_to_block_id.lower_bound(begin_key_name); map_iterator != key_to_block_id.upper_bound(end_key_name); ++map_iterator) {
 		std::array<uint8_t, BYTES_PER_BLOCK> data_buffer;
 		if (get(map_iterator->first, data_buffer) != 0) {
-			std::cerr << "client: read_range: failed. " << map_iterator->first << '\n';
+			std::cerr << "single_client: read_range: failed. " << map_iterator->first << '\n';
 			return -1;
 		}
 		data.push_back(data_buffer);
@@ -274,7 +273,7 @@ int SingleClient::clear_range(const std::string &begin_key_name, const std::stri
 {
 	for (auto map_iterator = key_to_block_id.lower_bound(begin_key_name); map_iterator != key_to_block_id.upper_bound(end_key_name); ++map_iterator) {
 		if (clear(map_iterator->first) != 0) {
-			std::cerr << "client: clear_range: failed. " << map_iterator->first << '\n';
+			std::cerr << "single_client: clear_range: failed. " << map_iterator->first << '\n';
 			return -1;
 		}
 	}
@@ -284,30 +283,30 @@ int SingleClient::clear_range(const std::string &begin_key_name, const std::stri
 int SingleClient::fetch_branch(uint16_t leaf_id)
 {
 	if (send(socket_fd, &leaf_id, sizeof(leaf_id), 0) != sizeof(leaf_id)) {
-		std::cerr << "client: send: failed" << std::endl;
+		perror("single_client: send: failed");
 		return -1;
 	}
 #ifdef DEBUG
-	std::cout << "client: sent leaf_id = " << leaf_id << '\n';
+	std::cout << "single_client: sent leaf_id = " << leaf_id << '\n';
 #endif
 
 	uint16_t num_blocks;
 	if (recv(socket_fd, &num_blocks, sizeof(num_blocks), 0) != sizeof(num_blocks)) {
-		std::cerr << "client: recv: failed" << std::endl;
+		perror("single_client: recv: failed");
 		return -1;
 	}
 	branch.resize(num_blocks);
 #ifdef DEBUG
-	std::cout << "client: num_blocks = " << num_blocks << '\n';
+	std::cout << "single_client: num_blocks = " << num_blocks << '\n';
 #endif
 
 	std::vector<uint16_t> leaf_ids (num_blocks, 0);
 	if (recv(socket_fd, leaf_ids.data(), sizeof(uint16_t) * num_blocks, 0) != (long int) sizeof(uint16_t) * num_blocks) {
-		std::cerr << "client: recv: failed" << std::endl;
+		perror("single_client: recv: failed");
 		return -1;
 	}
 #ifdef DEBUG
-	std::cout << "client: leaf_ids =";
+	std::cout << "single_client: leaf_ids =";
 	for (int i = 0; i < num_blocks; ++i) {
 		if (i % BLOCKS_PER_BUCKET == 0)
 			std::cout << " |";
@@ -319,13 +318,13 @@ int SingleClient::fetch_branch(uint16_t leaf_id)
 	std::array<uint8_t, BYTES_PER_BLOCK> data_buffer;
 	for (uint16_t i = 0; i < num_blocks; ++i) {
 		if (recv(socket_fd, data_buffer.data(), BYTES_PER_BLOCK, 0) != BYTES_PER_BLOCK) {
-			std::cerr << "client: recv: failed" << std::endl;
+			perror("single_client: recv: failed");
 			return -1;
 		}
 		branch[i] = Block(leaf_ids[i], data_buffer);
 	}
 #ifdef DEBUG
-	std::cout << "client: recv " << num_blocks << " blocks\n";
+	std::cout << "single_client: recv " << num_blocks << " blocks\n";
 #endif
 
 	return 0;
@@ -348,7 +347,7 @@ void SingleClient::traverse_branch(uint16_t requested_block_id, enum Operation o
 			uint16_t idx = find_intersection_bucket(position_map[requested_block_id], rand_leaf_id);
 			position_map[requested_block_id] = rand_leaf_id;
 #ifdef DEBUG
-			std::cout << "client: found leaf_id " << requested_block_id << ", randomized to leaf_id " << rand_leaf_id << ", bucket idx " << idx << '\n';
+			std::cout << "single_client: found leaf_id " << requested_block_id << ", randomized to leaf_id " << rand_leaf_id << ", bucket idx " << idx << '\n';
 #endif
 			for (long j = (idx + 1) * BLOCKS_PER_BUCKET - 1; j >= 0; --j) {
 				if (branch[j].get_block_id() == 0) {
@@ -404,12 +403,12 @@ void SingleClient::traverse_branch(uint16_t requested_block_id, enum Operation o
 			uint16_t idx = find_intersection_bucket(position_map[requested_block_id], rand_leaf_id);
 			position_map[requested_block_id] = rand_leaf_id;
 #ifdef DEBUG
-			std::cout << "client: found leaf_id in stash" << requested_block_id << ", randomized to leaf_id " << rand_leaf_id << ", bucket idx " << idx << '\n';
+			std::cout << "single_client: found leaf_id in stash" << requested_block_id << ", randomized to leaf_id " << rand_leaf_id << ", bucket idx " << idx << '\n';
 #endif
 			for (long j = (idx + 1) * BLOCKS_PER_BUCKET - 1; j >= 0; --j) {
 				if (branch[j].get_block_id() == 0) {
 #ifdef DEBUG
-					std::cout << "client: moved block " << current_block->first << " from stash to branch\n";
+					std::cout << "single_client: moved block " << current_block->first << " from stash to branch\n";
 #endif
 					branch[j] = Block(current_block->first, current_block->second);
 					stash.erase(current_block);
@@ -422,7 +421,7 @@ void SingleClient::traverse_branch(uint16_t requested_block_id, enum Operation o
 		for (long j = idx * BLOCKS_PER_BUCKET; j < (idx + 1) * BLOCKS_PER_BUCKET; ++j) {
 			if (branch[j].get_block_id() == 0) {
 #ifdef DEBUG
-				std::cout << "client: moved block " << current_block->first << " from stash to branch\n";
+				std::cout << "single_client: moved block " << current_block->first << " from stash to branch\n";
 #endif
 				branch[j] = Block(current_block->first, current_block->second);
 				current_block = stash.erase(current_block);
@@ -476,22 +475,22 @@ int SingleClient::send_branch()
 	}
 
 	if (send(socket_fd, leaf_ids.data(), sizeof(uint16_t) * leaf_ids.size(), 0) != (long int) (sizeof(uint16_t) * leaf_ids.size())) {
-		std::cerr << "send: failed\n";
+		perror("send: failed");
 		return -1;
 	}
 #ifdef DEBUG
-	std::cout << "client: sent " << branch.size() << " updated leaf_ids\n";
+	std::cout << "single_client: sent " << branch.size() << " updated leaf_ids\n";
 #endif
 
 
 	for (Block &block : branch) {
 		if (send(socket_fd, block.get_data().data(), BYTES_PER_BLOCK, 0) != BYTES_PER_BLOCK) {
-			std::cerr << "send: failed\n";
+			perror("send: failed");
 			return -1;
 		}
 	}
 #ifdef DEBUG
-	std::cout << "client: sent " << branch.size() << " updated blocks\n";
+	std::cout << "single_client: sent " << branch.size() << " updated blocks\n";
 #endif
 	return 0;
 }
@@ -527,6 +526,6 @@ void SingleClient::store_state()
 
 		close(state_fd);
 	} else {
-		std::cerr << "client: failed to open the output file\n";
+		std::cerr << "single_client: failed to open the output file\n";
 	}
 }
