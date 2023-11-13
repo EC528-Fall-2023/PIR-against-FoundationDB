@@ -102,8 +102,6 @@ Master PathORAM Client (Application):
 - It stores a map that maps the leaf node id to the actual leaf node.
 - It sends the request tuple to the Path ORAM server, retrieves a branch, performs the shuffling, and sends it back to the server.
 - The introduction of a Master client enables multiple clients since they can retrieve the most recent position map and stash of the system
-- This also makes the other client stateless
-- We assume the Master client is trusted under the same assumption of the original paper, where the PathORAM client is also trusted
   
 FoundationDB:
 - FoundationDB serves as the core database infrastructure of the system.
@@ -117,6 +115,10 @@ The design decisions made during the global architecture design have significant
 #### Path ORAM Algorithm:
 - Implication: The integration of the Path ORAM algorithm is a fundamental design decision aimed at ensuring oblivious data access, which prevents attacks from inferring sensitive information based on access patterns.
 - Reason: Path ORAM is chosen for its ability to provide absolute privacy guarantees by constantly shuffling data in a tree structure. This design choice aligns with the project's primary objective of enhancing data privacy within FoundationDB.
+
+#### Introduction to Master Client
+- Implication: With a component that has the information necessary for the client to retrieve data it enables multiple clients to receive the position map and stash necessary to operate
+- Reason: This eliminates the worry of having too much state stored at the end client, by now making them stateless. Also, we are assuming the master client is always safe, under the same assumption as the client in the PathORAM paper is always safe
   
 #### FoundationDB as the Core Database:
 - Implication: Using FoundationDB as the core database infrastructure provides scalability and reliability, allowing the system to handle large datasets and high transaction volumes.
