@@ -89,7 +89,7 @@ These principal user roles, Sarah and Alex, encompass specific characteristics a
 
 #### In-Depth Explanation of each component within PIR:
 Path ORAM Server (Server):
-- The Path ORAM Server is the omponent responsible for implementing one part of the Path ORAM algorithm.
+- The Path ORAM Server is the component responsible for implementing one part of the Path ORAM algorithm.
 - It stores a binary tree structure full of encrypted data where each node (bucket) contains data blocks, which contains an id.
 - It listens for data requests in a tuple: operation type, leaf node id (leftmost id is 1, rightmost is highest), and the actual data (if write operation). 
 - It returns all of the data from all of the nodes between the root and the leaf with the requested id (the tree branch) back to the client.
@@ -97,10 +97,13 @@ Path ORAM Server (Server):
 - This continuous random shuffling ensures access patterns are obscured, enhancing data privacy.
 - After each branch update, the Path ORAM server updates the key-value pairs in the FoundationDB server via the Java API.
 
-Path ORAM Client (Application):
+Master PathORAM Client (Application):
 - The Path ORAM Client is a library for an application that consists of functions similar to the FoundationDB Java API with the tradeoff in increased security for decreased performance.
 - It stores a map that maps the leaf node id to the actual leaf node.
 - It sends the request tuple to the Path ORAM server, retrieves a branch, performs the shuffling, and sends it back to the server.
+- The introduction of a Master client enables multiple clients since they can retrieve the most recent position map and stash of the system
+- This also makes the other client stateless
+- We assume the Master client is trusted under the same assumption of the original paper, where the PathORAM client is also trusted
   
 FoundationDB:
 - FoundationDB serves as the core database infrastructure of the system.
@@ -141,7 +144,7 @@ When you want to read the book, you go to the library and request the pages of t
 - Being able to run PIR against FoundationDB on Massachuttes Open Cloud (MOC)
 
 ## 6. Inference Attack Model
-To test that our PathORAM has been implimented correctly, we will be creating a simulated attack of a compromised database, assuming a correct implimentation of the PathORAM algorithm there should not be any data inferred from the attack.
+To test that our PathORAM has been implemented correctly, we will be creating a simulated attack of a compromised database, assuming a correct implementation of the PathORAM algorithm there should not be any data inferred from the attack.
 
 ### Planned Architecture of the attack
 
