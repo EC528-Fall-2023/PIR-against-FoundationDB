@@ -26,30 +26,11 @@ Block::Block(uint16_t block_id, const uint8_t *data, uint32_t data_size)
 
 void Block::swap(Block &block)
 {
-	union bytes temp = {0};
+	union bytes temp;
+	memset(&temp, 0, sizeof(union bytes));
 	memcpy(&temp, &bytes, sizeof(union bytes));
 	memcpy(&bytes, &block.bytes, sizeof(union bytes));
 	memcpy(&block.bytes, &temp, sizeof(union bytes));
-}
-
-inline uint16_t Block::get_block_id()
-{
-	return bytes.data_dec.block_id;
-}
-
-inline uint8_t *Block::get_decrypted_data()
-{
-	return bytes.data_dec.data;
-}
-
-inline uint8_t *Block::get_encrypted_data()
-{
-	return bytes.data_enc.data;
-}
-
-inline void Block::set_block_id(uint16_t block_id)
-{
-	bytes.data_dec.block_id = block_id;
 }
 
 void Block::set_decrypted_data(const uint8_t *data, uint32_t data_size)
@@ -82,13 +63,13 @@ void Block::set_decrypted_random_data()
 	}
 }
 
-int Block::encrypt(uint8_t *key, uint8_t *iv)
+int Block::encrypt(const uint8_t *key, const uint8_t *iv)
 {
 	// put encryption here
 	is_encrypted = true;
 }
 
-int Block::decrypt(uint8_t *key, uint8_t *iv)
+int Block::decrypt(const uint8_t *key, const uint8_t *iv)
 {
 	// put decryption here
 	is_encrypted = false;

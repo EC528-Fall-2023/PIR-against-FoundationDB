@@ -17,17 +17,17 @@ public:
 
 	void swap(Block &block);
 
-	uint16_t get_block_id();
-	uint8_t *get_decrypted_data();
-	uint8_t *get_encrypted_data();
+	uint16_t get_block_id() { return bytes.data_dec.block_id; }
+	uint8_t *get_decrypted_data() { return bytes.data_dec.data; }
+	uint8_t *get_encrypted_data() { return bytes.data_enc.data; }
 
-	void set_block_id(uint16_t block_id);
+	void set_block_id(uint16_t block_id) { bytes.data_dec.block_id = block_id; }
 	void set_decrypted_data(const uint8_t *data, uint32_t data_size);
 	void set_encrypted_data(const uint8_t *data, uint32_t data_size);
 	void set_decrypted_random_data();
 
-	int encrypt(uint8_t *key, uint8_t *iv);	
-	int decrypt(uint8_t *key, uint8_t *iv);	
+	int encrypt(const uint8_t *key, const uint8_t *iv);	
+	int decrypt(const uint8_t *key, const uint8_t *iv);	
 
 	bool is_encrypted;
 private:

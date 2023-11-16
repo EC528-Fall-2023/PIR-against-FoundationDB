@@ -14,7 +14,7 @@ SRC := $(wildcard $(SRC_DIR)/*.cpp)
 OBJ := $(patsubst $(SRC_DIR)/%.cpp,$(OBJ_DIR)/%.o,$(SRC))
 INC := $(wildcard $(INC_DIR)/*.h)
 
-.PHONY: all single_client multiclient init clean
+.PHONY: all server single_client multiclient init clean
 
 all: single_client multiclient
 

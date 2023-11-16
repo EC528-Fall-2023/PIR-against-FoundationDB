@@ -308,14 +308,14 @@ inline int setup_fdb(pthread_t &network_thread)
 			temp[1] = (tree_index & 0xff00) >> 8;
 			temp[2] = tree_index & 0x00ff;
 			uint16_t leaf_id = 0;
-			std::array<uint8_t, (sizeof(leaf_id) + BYTES_PER_BLOCK) * BLOCKS_PER_BUCKET> bucket;
-			for (uint8_t &byte : bucket) {
-				byte = random_byte(generator);
+			uint8_t bucket[(BLOCK_ID_SIZE + BYTES_PER_BLOCK) * BLOCKS_PER_BUCKET];
+			for (uint32_t i = 0; i < (BLOCK_ID_SIZE + BYTES_PER_BLOCK) * BLOCKS_PER_BUCKET; ++i) {
+				bucket[i] = random_byte(generator);
 			}
 			for (int block = 0; block < BLOCKS_PER_BUCKET; ++block) {
-				memcpy(bucket.data() + (sizeof(leaf_id) + BYTES_PER_BLOCK) * block, &leaf_id, sizeof(leaf_id));
+				memcpy(bucket + (BLOCK_ID_SIZE + BYTES_PER_BLOCK) * block, &leaf_id, sizeof(leaf_id));
 			}
-			fdb_transaction_set(tr, (const uint8_t *) temp, sizeof(temp), (const uint8_t *) bucket.data(), bucket.size());
+			fdb_transaction_set(tr, (const uint8_t *) temp, sizeof(temp), bucket, sizeof(bucket));
 
 			if (tree_index % 3000 == 0) {
 				status = fdb_transaction_commit(tr);
@@ -429,12 +429,7 @@ inline int get_branch_from_fdb(std::vector<Block> &branch, std::vector<uint16_t>
 		if (fdb_future_get_value(status, &out_present, &out_value, &out_value_length) == 0) {
 			if (out_present) {
 				for (int current_block = 0; current_block < BLOCKS_PER_BUCKET; ++current_block) {
-					uint16_t temp_leaf_id = *((uint16_t *) (out_value + current_block * (sizeof(temp_leaf_id) + BYTES_PER_BLOCK)));
-					//uint16_t temp_leaf_id;
-					//memcpy(&temp_leaf_id, out_value + current_block * (sizeof(temp_leaf_id) + BYTES_PER_BLOCK), sizeof(temp_leaf_id));
-					std::array<uint8_t, BYTES_PER_BLOCK> data_buffer;
-					memcpy(data_buffer.data(), out_value + sizeof(temp_leaf_id) + current_block * (BYTES_PER_BLOCK + sizeof(temp_leaf_id)), BYTES_PER_BLOCK);
-					branch[current_bucket * BLOCKS_PER_BUCKET + current_block] = Block(temp_leaf_id, data_buffer);
+					branch[current_bucket * BLOCKS_PER_BUCKET + current_block].set_encrypted_data(out_value + current_block * (BYTES_PER_BLOCK + BLOCK_ID_SIZE), BYTES_PER_BLOCK + BLOCK_ID_SIZE);
 				}
 			} else {
 			}
@@ -454,28 +449,19 @@ inline int get_branch_from_fdb(std::vector<Block> &branch, std::vector<uint16_t>
 
 inline int send_branch_to_client(std::vector<Block> &branch)
 {
-	// send all leaf_ids in branch
-	std::vector<uint16_t> leaf_ids(branch.size());
-	for (unsigned long i = 0; i < branch.size(); ++i) {
-		leaf_ids[i] = branch[i].get_block_id();
-	}
-	if (send(client_socket, leaf_ids.data(), sizeof(uint16_t) * leaf_ids.size(), 0) != (long int) (leaf_ids.size() * sizeof(uint16_t))) {
-		perror("server: send: failed");
-		return -1;
-	}
-#ifdef DEBUG
-	std::cout << "server: sent leaf_ids\n";
-#endif
-
 	// send all data in branch
-	for (Block &block : branch) {
-		if (send(client_socket, block.get_data().data(), BYTES_PER_BLOCK, 0) != BYTES_PER_BLOCK) {
+	for (uint32_t i = 0; i < branch.size() - 1; ++i) {
+		if (send(client_socket, branch[i].get_encrypted_data(), BYTES_PER_BLOCK + BLOCK_ID_SIZE, MSG_MORE) != BYTES_PER_BLOCK + BLOCK_ID_SIZE) {
 			perror("server: send: failed");
 			return -1;
 		}
 	}
+	if (send(client_socket, branch.back().get_encrypted_data(), BYTES_PER_BLOCK + BLOCK_ID_SIZE, 0) != BYTES_PER_BLOCK + BLOCK_ID_SIZE) {
+		perror("server: send: failed");
+		return -1;
+	}
 #ifdef DEBUG
-	std::cout << "server: sent " << branch.size() << " blocks\n";
+	std::cout << "server: sent " << branch.size() << " encrypted blocks\n";
 #endif
 
 	return 0;
@@ -483,26 +469,15 @@ inline int send_branch_to_client(std::vector<Block> &branch)
 
 inline int receive_updated_blocks(std::vector<Block> &branch)
 {
-	// receive all updated leaf_ids
-	std::vector<uint16_t> leaf_ids(branch.size(), 0);
-	if (recv(client_socket, leaf_ids.data(), sizeof(uint16_t) * leaf_ids.size(), 0) != (long int) (sizeof(uint16_t) * leaf_ids.size())) {
-		perror("server: recv: failed");
-		return -1;
-	}
-
 	// receive + update all data from branch
-	for (unsigned long i = 0; i < branch.size(); ++i) {
-		std::array<uint8_t, BYTES_PER_BLOCK> data_buffer;
-		if (recv(client_socket, data_buffer.data(), BYTES_PER_BLOCK, MSG_WAITALL) != BYTES_PER_BLOCK) {
+	for (uint32_t i = 0; i < branch.size(); ++i) {
+		if (recv(client_socket, branch[i].get_encrypted_data(), BYTES_PER_BLOCK + BLOCK_ID_SIZE, MSG_WAITALL) != BYTES_PER_BLOCK + BLOCK_ID_SIZE) {
 			perror("server: recv: failed");
 			return -1;
 		}
-		branch[i].set_block_id(leaf_ids[i]);
-		branch[i].set_data(data_buffer);
 	}
 #ifdef DEBUG
-	std::cout << "server: recv updated leaf_ids\n";
-	std::cout << "server: recv updated data\n";
+	std::cout << "server: recv updated encrypted data\n";
 #endif
 
 	return 0;
@@ -510,20 +485,17 @@ inline int receive_updated_blocks(std::vector<Block> &branch)
 
 inline int send_branch_to_fdb(std::vector<Block> &branch, std::vector<uint16_t> &branch_indexes)
 {
-	for (uint16_t current_bucket = 0; current_bucket < branch.size() / BLOCKS_PER_BUCKET; ++current_bucket) {
-		// create transaction
-		if (fdb_database_create_transaction(db, &tr) != 0) {
-			std::cerr << "server: fdb_database_create_transaction: failed\n";
-			return -1;
-		}
+	// create transaction
+	if (fdb_database_create_transaction(db, &tr) != 0) {
+		std::cerr << "server: fdb_database_create_transaction: failed\n";
+		return -1;
+	}
 
+	for (uint16_t current_bucket = 0; current_bucket < branch.size() / BLOCKS_PER_BUCKET; ++current_bucket) {
 		// construct bucket
-		std::array<uint8_t, (sizeof(uint16_t) + BYTES_PER_BLOCK) * BLOCKS_PER_BUCKET> bucket;
+		uint8_t bucket[(BLOCK_ID_SIZE + BYTES_PER_BLOCK) * BLOCKS_PER_BUCKET];
 		for (uint8_t current_block = 0; current_block < BLOCKS_PER_BUCKET; ++current_block) {
-			uint16_t temp_leaf_id = branch[current_bucket * BLOCKS_PER_BUCKET + current_block].get_block_id();
-			*((uint16_t *) (bucket.data() + current_block * (sizeof(temp_leaf_id) + BYTES_PER_BLOCK))) = temp_leaf_id;
-			//memcpy(bucket.data() + current_block * (sizeof(temp_leaf_id) + BYTES_PER_BLOCK), &temp_leaf_id, sizeof(temp_leaf_id));
-			memcpy(bucket.data() + sizeof(temp_leaf_id) + current_block * (sizeof(temp_leaf_id) + BYTES_PER_BLOCK), branch[current_bucket * BLOCKS_PER_BUCKET + current_block].get_data().data(), BYTES_PER_BLOCK);
+			memcpy(bucket + current_block * (BLOCK_ID_SIZE + BYTES_PER_BLOCK), branch[current_bucket * BLOCKS_PER_BUCKET + current_block].get_encrypted_data(), BLOCK_ID_SIZE + BYTES_PER_BLOCK);
 		}
 
 		// send bucket to fdb
@@ -531,21 +503,22 @@ inline int send_branch_to_fdb(std::vector<Block> &branch, std::vector<uint16_t> 
 		temp[0] = 0;
 		temp[1] = (branch_indexes[current_bucket] & 0xff00) >> 8;
 		temp[2] = branch_indexes[current_bucket] & 0x00ff;
-		fdb_transaction_set(tr, temp, sizeof(temp), bucket.data(), (sizeof(uint16_t) + BYTES_PER_BLOCK) * BLOCKS_PER_BUCKET);
-		status = fdb_transaction_commit(tr);
-		if ((fdb_future_block_until_ready(status)) != 0) {
-			std::cerr << "server: fdb_future_block_until_ready: failed\n";
-			return -1;
-		}
-		if (fdb_future_get_error(status)) {
-			std::cerr << "server: fdb_future_is_error: its an error...\n";
-			return -1;
-		}
-		fdb_future_destroy(status);
-		fdb_transaction_destroy(tr);
-		status = NULL;
-		tr = NULL;
+		fdb_transaction_set(tr, temp, sizeof(temp), bucket, sizeof(bucket));
 	}
+
+	status = fdb_transaction_commit(tr);
+	if ((fdb_future_block_until_ready(status)) != 0) {
+		std::cerr << "server: fdb_future_block_until_ready: failed\n";
+		return -1;
+	}
+	if (fdb_future_get_error(status)) {
+		std::cerr << "server: fdb_future_is_error: its an error...\n";
+		return -1;
+	}
+	fdb_future_destroy(status);
+	fdb_transaction_destroy(tr);
+	status = NULL;
+	tr = NULL;
 
 	return 0;
 }
