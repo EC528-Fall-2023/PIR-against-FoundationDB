@@ -183,7 +183,7 @@ int main()
 					std::cout << "---------------------------\n";
 				std::cout << branch[i].get_block_id() << ',' << '\t';
 				for (int j = 0; j < 10; ++j) {
-					char c = branch[i].get_data()[j];
+					char c = branch[i].get_decrypted_data()[j];
 					if (c < 32 || c > 126)
 						c = '.';
 					std::cout << c << ' ';
@@ -309,12 +309,14 @@ inline int setup_fdb(pthread_t &network_thread)
 			temp[2] = tree_index & 0x00ff;
 			uint16_t leaf_id = 0;
 			uint8_t bucket[(BLOCK_ID_SIZE + BYTES_PER_BLOCK) * BLOCKS_PER_BUCKET];
+
 			for (uint32_t i = 0; i < (BLOCK_ID_SIZE + BYTES_PER_BLOCK) * BLOCKS_PER_BUCKET; ++i) {
 				bucket[i] = random_byte(generator);
 			}
 			for (int block = 0; block < BLOCKS_PER_BUCKET; ++block) {
 				memcpy(bucket + (BLOCK_ID_SIZE + BYTES_PER_BLOCK) * block, &leaf_id, sizeof(leaf_id));
 			}
+
 			fdb_transaction_set(tr, (const uint8_t *) temp, sizeof(temp), bucket, sizeof(bucket));
 
 			if (tree_index % 3000 == 0) {
