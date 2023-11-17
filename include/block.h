@@ -5,11 +5,8 @@
 #include <cstring>
 #include <random>
 
-#include <vector>
-#include <iomanip>
 #include <openssl/conf.h>
 #include <openssl/evp.h>
-#include <openssl/err.h>
 #include <openssl/aes.h>
 
 #define BYTES_PER_BLOCK 1024
@@ -35,7 +32,6 @@ public:
 
 	int encrypt(const uint8_t *key, const uint8_t *iv);	
 	int decrypt(const uint8_t *key, const uint8_t *iv);
-    void handleErrors();
 
 	bool is_encrypted;
 private:

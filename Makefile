@@ -1,7 +1,7 @@
 CC := g++
 CFLAGS = -std=c++17 -Wall -Wextra -Werror
 CPPFLAGS := -Iinclude
-LDLIBS := -lm -lpthread -lrt
+LDLIBS := -lm -lpthread -lrt -lssl -lcrypto
 
 ifeq ($(DEBUG), 1)
 	CFLAGS += -g -DDEBUG

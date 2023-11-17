@@ -5,6 +5,16 @@ static std::uniform_int_distribution<int> oram_random(1, 32768); // [1, 2^15]
 
 SingleClient::SingleClient(const std::string &server_ip, const int port)
 {
+/*
+	if (access(".oram_enc", F_OK) != 0) {
+		perror("single_client: access: .oram_enc");
+		exit(EXIT_FAILURE);
+	}
+*/
+	// TODO: read .oram_enc file and put values into enc_key and enc_iv
+	enc_key = (uint8_t *) "0123456789abcdeF0123456789abcdeF";
+	enc_iv = (uint8_t *) "1234567890abcdef";
+
 	if ( (socket_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0 ) {
 		printf("socket: failed\n");
 		exit(EXIT_FAILURE);
@@ -293,7 +303,7 @@ int SingleClient::fetch_branch(uint16_t leaf_id)
 			perror("single_client: recv: failed");
 			return -1;
 		}
-		branch[i].decrypt();
+		branch[i].decrypt(enc_key, enc_iv);
 	}
 
 #ifdef DEBUG
@@ -301,7 +311,7 @@ int SingleClient::fetch_branch(uint16_t leaf_id)
 	for (int i = 0; i < num_blocks; ++i) {
 		if (i % BLOCKS_PER_BUCKET == 0)
 			std::cout << " |";
-		std::cout << ' ' << branch[i].get_leaf_id();
+		std::cout << ' ' << branch[i].get_block_id();
 	}
 	std::cout << '\n';
 	std::cout << "single_client: recv " << num_blocks << " blocks\n";
@@ -442,13 +452,13 @@ uint16_t SingleClient::find_intersection_bucket(uint16_t leaf_id_1, uint16_t lea
 int SingleClient::send_branch()
 {
 	for (uint32_t i = 0; i < branch.size() - 1; ++i) {
-		branch[i].encrypt();
+		branch[i].encrypt(enc_key, enc_iv);
 		if (send(socket_fd, branch[i].get_encrypted_data(), BLOCK_ID_SIZE + BYTES_PER_BLOCK, MSG_MORE) != BLOCK_ID_SIZE + BYTES_PER_BLOCK) {
 			perror("send: failed");
 			return -1;
 		}
 	}
-	branch.back().encrypt();
+	branch.back().encrypt(enc_key, enc_iv);
 	if (send(socket_fd, branch.back().get_encrypted_data(), BLOCK_ID_SIZE + BYTES_PER_BLOCK, 0) != BLOCK_ID_SIZE + BYTES_PER_BLOCK) {
 		perror("send: failed");
 		return -1;

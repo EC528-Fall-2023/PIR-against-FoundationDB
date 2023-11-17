@@ -65,66 +65,67 @@ void Block::set_decrypted_random_data()
 
 int Block::encrypt(const uint8_t *key, const uint8_t *iv)
 {
-    EVP_CIPHER_CTX *ctx;
-    int len;
-    int ciphertext_len;
+	EVP_CIPHER_CTX *ctx;
+	int len;
+	int ciphertext_len;
 
-    if (!(ctx = EVP_CIPHER_CTX_new())) { // initialize cipher context
-        handleErrors();
-    }
+	// initialize cipher context
+	if (!(ctx = EVP_CIPHER_CTX_new()))
+		return -1;
 
-    if (1 != EVP_EncryptInit_ex(ctx, EVP_aes_256_cbc(), NULL, key, iv)){ // initialize encryption operation + cipher type
-        handleErrors();
-    }
+	// initialize encryption operation + cipher type
+	if (1 != EVP_EncryptInit_ex(ctx, EVP_aes_256_ctr(), NULL, key, iv))
+		return -1;
+ 
+ 	// does encryption
+ 	uint8_t out_buffer[BLOCK_ID_SIZE + BYTES_PER_BLOCK];
+	if (1 != EVP_EncryptUpdate(ctx, out_buffer, &len, bytes.data_enc.data, sizeof(union bytes)))
+		return -1;
 
-    if (1 != EVP_EncryptUpdate(ctx, bytes.data_enc.data, &len, bytes.data_dec.data, BYTES_PER_BLOCK + BLOCK_ID_SIZE)){ // does encryption
-        handleErrors();
-    }
-    ciphertext_len = len;
+	ciphertext_len = len;
 
-    if (1 != EVP_EncryptFinal_ex(ctx, bytes.data_enc.data + len, &len)){ // does final parts of encryption
-        handleErrors();
-    }
-    ciphertext_len += len; // final length of the encrypted text
+	// does final parts of encryption
+	if (1 != EVP_EncryptFinal_ex(ctx, out_buffer + len, &len))
+		return -1;
 
-    EVP_CIPHER_CTX_free(ctx); // free the cipher context
-
+	ciphertext_len += len;
+	EVP_CIPHER_CTX_free(ctx);
 	is_encrypted = true;
-    return ciphertext_len;
+	memcpy(bytes.data_enc.data, out_buffer, sizeof(union bytes));
+
+	return ciphertext_len;
 }
 
 int Block::decrypt(const uint8_t *key, const uint8_t *iv)
 {
-    EVP_CIPHER_CTX *ctx;
-    int len;
-    int plaintext_len;
+	EVP_CIPHER_CTX *ctx;
+	int len;
+	int plaintext_len;
 
-    if (!(ctx = EVP_CIPHER_CTX_new())){ // initialize cipher context
-        handleErrors();
-    }
+	// initialize cipher context
+	if (!(ctx = EVP_CIPHER_CTX_new()))
+		return -1;
 
-    if (1 != EVP_DecryptInit_ex(ctx, EVP_aes_256_cbc(), NULL, key, iv)){ // initialize decryption operation + cipher type
-        handleErrors();
-    }
+	// initialize decryption operation + cipher type
+	if (1 != EVP_DecryptInit_ex(ctx, EVP_aes_256_ctr(), NULL, key, iv))
+		return -1;
 
-    if (1 != EVP_DecryptUpdate(ctx, bytes.data_dec.data, &len, bytes.data_enc.data, BYTES_PER_BLOCK + BLOCK_ID_SIZE)){ // does decryption
-        handleErrors();
-    }
-    plaintext_len = len;
+	// does decryption
+ 	uint8_t out_buffer[BLOCK_ID_SIZE + BYTES_PER_BLOCK];
+	if (1 != EVP_DecryptUpdate(ctx, out_buffer, &len, bytes.data_enc.data, sizeof(union bytes)))
+		return -1;
 
-    if (1 != EVP_DecryptFinal_ex(ctx, bytes.data_dec.data + len, &len)) handleErrors(){ // does final parts of decryption
-        handleErrors();
-    }
-    plaintext_len += len; // final length of plaintext
+	plaintext_len = len;
 
-    EVP_CIPHER_CTX_free(ctx); // free the cipher context
+	// does final parts of decryption
+	if (1 != EVP_DecryptFinal_ex(ctx, out_buffer + len, &len))
+		return -1;
 
+	plaintext_len += len;
+	EVP_CIPHER_CTX_free(ctx);
 	is_encrypted = false;
-    return plaintext_len;
-}
+	memcpy(bytes.data_enc.data, out_buffer, sizeof(union bytes));
 
-void Block::handleErrors() {
-    ERR_print_errors_fp(stderr);
-    abort();
+	return plaintext_len;
 }
 
