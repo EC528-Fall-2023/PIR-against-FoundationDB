@@ -46,6 +46,7 @@ These principal user roles, Sarah and Alex, encompass specific characteristics a
 - Server Process: The Path ORAM server will listen for incoming requests, store all data in the tree structure, and send the data back to the FoundationDB server via the FoundationDB Java API.
 - Attack Replication: Replicate a real-world attack that leverages access patterns. This involves simulating an adversarial scenario to analyze and understand the vulnerabilities that might exist within the system when it comes to privacy and access pattern analysis.
 - Overhead Analysis: Measure and analyze the overhead introduced by the use of the Path ORAM algorithm for various operations within the FoundationDB system. Explore potential strategies to mitigate this overhead.
+- MultiClient Adoption: In the original PathORAM there is only one client that is reading or writing to a database, but with a new architectural system, multiple clients can be enabled to and retrieve the necessary information to have the most recent changes to the data
 
 ### Out-of-Scope:
 
@@ -95,7 +96,7 @@ Path ORAM Server (Server):
 - It returns all of the data from all of the nodes between the root and the leaf with the requested id (the tree branch) back to the client.
 - Then it receives the shuffled branch to update the tree.
 - This continuous random shuffling ensures access patterns are obscured, enhancing data privacy.
-- After each branch update, the Path ORAM server updates the key-value pairs in the FoundationDB server via the Java API.
+- After each branch update, the Path ORAM server updates the key-value pairs in the FoundationDB server via the C API.
 
 Master PathORAM Client (Application):
 - The Path ORAM Client is a library for an application that consists of functions similar to the FoundationDB Java API with the tradeoff in increased security for decreased performance.
@@ -126,7 +127,11 @@ The design decisions made during the global architecture design have significant
 
 #### Network Placement:
 - Implication: Putting a network between the PathORAM client and PathORAM server will improve security by preventing unauthorized access to private data.
-- Reason: A firewall can monitor and control incoming and out going network traffic between the PathaORAM client and PathORAM server. It will also log and monitor the traffic passing to help detect suspecious activity and potential attacks
+- Reason: A firewall can monitor and control incoming and outgoing network traffic between the PathaORAM client and PathORAM server. It will also log and monitor the traffic passing to help detect suspicious activity and potential attacks
+
+#### Encryption Process Placement:
+- Implication: Encryption is necessary in our process to ensure the private information we are trying to his is not kept in plain text, and for better design, we decided to put the encryption and decryption process in the block class
+- Reason: It encapsulates all the functionalities that are happening on the block object within itself and makes it easier to pass data over the network since it facilitates getting the block id and data regardless of encryption
 
 ### Helpful Analogy: 
 Lets say you are reading a top secret book and want to keep that hidden from your friends. You decide to hide that book in the library. To make it really difficult for your friends to find the book your reading, you decide to cut the book into pages and hide each page in a different book throughout the library. 
