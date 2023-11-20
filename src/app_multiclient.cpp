@@ -8,6 +8,7 @@
 int main()
 {
 	MultiClient client;
+	client.initialize();
 	while (1) {
 		//struct timeval start_time, end_time;
 		std::string option;
