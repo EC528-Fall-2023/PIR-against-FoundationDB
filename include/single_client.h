@@ -26,12 +26,6 @@ enum Operation {
 
 class SingleClient {
 public:
-/*
-	static SingleClient *get_instance();
-	SingleClient() = delete;
-	SingleClient(const SingleClient&) = delete;
-	SingleClient& operator=(const SingleClient&) = delete;
-*/
 	SingleClient();
 	~SingleClient();
 
@@ -43,10 +37,6 @@ public:
 	int clear_range(const std::string &begin_key_name, const std::string &end_key_name);
 
 private:
-/*
-	SingleClient(const std::string &server_ip = "127.0.0.1", const int port = 8080);
-	static SingleClient *instance;
-*/
 	int fetch_branch(uint16_t leaf_id);
 	void traverse_branch(uint16_t requested_block_id, enum Operation op, std::array<uint8_t, BYTES_PER_DATA> *value);
 	uint16_t find_intersection_bucket(uint16_t leaf_id_1, uint16_t leaf_id_2);
