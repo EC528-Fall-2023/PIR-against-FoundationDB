@@ -1,10 +1,10 @@
 CC := g++
 CFLAGS = -std=c++17 -Wall -Wextra -Werror
 CPPFLAGS := -Iinclude
-LDLIBS := -lm -lpthread -lrt -lssl -lcrypto
+LDLIBS := -lm -pthread -lrt -lssl -lcrypto
 
 ifeq ($(DEBUG), 1)
-	CFLAGS += -g -DDEBUG
+	CFLAGS += -g3 -DDEBUG
 endif
 
 SRC_DIR := src

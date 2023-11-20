@@ -3,45 +3,25 @@
 static std::random_device generator;
 static std::uniform_int_distribution<int> oram_random(1, 32768); // [1, 2^15]
 
-SingleClient::SingleClient(const std::string &server_ip, const int port)
+SingleClient::SingleClient() {}
+
+int SingleClient::initialize(const std::string &server_ip, const int port, int (*custom_init)())
 {
 /*
 	if (access(".oram_enc", F_OK) != 0) {
 		perror("single_client: access: .oram_enc");
-		exit(EXIT_FAILURE);
+		return -1
 	}
 */
 	// TODO: read .oram_enc file and put values into enc_key and enc_iv
 	enc_key = (uint8_t *) "0123456789abcdeF0123456789abcdeF";
 	enc_iv = (uint8_t *) "1234567890abcdef";
 
-	if ( (socket_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0 ) {
-		printf("socket: failed\n");
-		exit(EXIT_FAILURE);
-	}
-
-	server_addr.sin_family = AF_INET;
-	server_addr.sin_port = htons(port);
-
-	if (inet_pton(AF_INET, server_ip.c_str(), &server_addr.sin_addr) <= 0) {
-		printf("inet_pton: failed\n");
-		//close(socket_fd);
-		exit(EXIT_FAILURE);
-	}
-
-	if (connect(socket_fd, (struct sockaddr *) &server_addr, sizeof(server_addr)) < 0 ) {
-		printf("single_client: connect: failed\n");
-		exit(EXIT_FAILURE);
-	}
-#ifdef DEBUG
-	std::cout << "single_client: connection to " << server_ip << ':' << port << " established\n";
-#endif
-
 	if (access(".oram_state", F_OK) == 0) {
 		int state_fd;
 		if ( (state_fd = open(".oram_state", O_RDONLY | O_CREAT, 0666)) == -1) {
 			std::cerr << "single_client: open state: failed " << errno << '\n';
-			exit(EXIT_FAILURE);
+			return -1;
 		}
 
 		std::string key;
@@ -69,14 +49,83 @@ SingleClient::SingleClient(const std::string &server_ip, const int port)
 
 		read(state_fd, &size, sizeof(size));
 		for (unsigned int i = 0; i < size; ++i) {
-			std::array<uint8_t, BYTES_PER_BLOCK> temp;
+			std::array<uint8_t, BYTES_PER_DATA> temp;
 			read(state_fd, &block_id, sizeof(block_id));
-			read(state_fd, temp.data(), BYTES_PER_BLOCK);
+			read(state_fd, temp.data(), BYTES_PER_DATA);
 			stash[block_id] = temp;
 		}
 
 		close(state_fd);
 	}
+
+	if ( (socket_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0 ) {
+		printf("socket: failed\n");
+		return -1;
+	}
+
+	server_addr.sin_family = AF_INET;
+	server_addr.sin_port = htons(port);
+
+	if (inet_pton(AF_INET, server_ip.c_str(), &server_addr.sin_addr) <= 0) {
+		printf("inet_pton: failed\n");
+		//close(socket_fd);
+		return -1;
+	}
+
+	if (connect(socket_fd, (struct sockaddr *) &server_addr, sizeof(server_addr)) < 0 ) {
+		printf("single_client: connect: failed\n");
+		return -1;
+	}
+#ifdef DEBUG
+	std::cout << "single_client: connection to " << server_ip << ':' << port << " established\n";
+#endif
+
+	uint8_t fdb_is_initialized;
+	if (recv(socket_fd, &fdb_is_initialized, sizeof(fdb_is_initialized), 0) != sizeof(fdb_is_initialized)) {
+		perror("send: failed");
+		return -1;
+	}
+
+	if (fdb_is_initialized)
+		return 0;
+
+	if (custom_init == nullptr) {
+		uint8_t random_data[BYTES_PER_DATA];
+		for (int i = 0; i < BLOCKS_PER_BUCKET * BUCKETS_PER_TREE - 1; ++i) {
+			memset(random_data, 0, BYTES_PER_DATA);
+			for (int j = 0; j < BYTES_PER_DATA; ++j) {
+				random_data[j] = oram_random(generator);
+			}
+			Block block(0, random_data, BYTES_PER_DATA);
+			if (block.encrypt(enc_key, enc_iv) == -1) {
+				perror("single_client: encrypt");
+				return -1;
+			}
+			if (send(socket_fd, block.get_encrypted_data(), BLOCK_SIZE, MSG_MORE) != BLOCK_SIZE) {
+				perror("single_client: send");
+				return -1;
+			}
+		}
+		memset(random_data, 0, BYTES_PER_DATA);
+		for (int j = 0; j < BYTES_PER_DATA; ++j) {
+			random_data[j] = oram_random(generator);
+		}
+		Block block(0, random_data, BYTES_PER_DATA);
+		if (block.encrypt(enc_key, enc_iv) == -1) {
+			perror("single_client: encrypt");
+			return -1;
+		}
+		if (send(socket_fd, block.get_encrypted_data(), BLOCK_SIZE, 0) != BLOCK_SIZE) {
+			perror("single_client: send");
+			return -1;
+		}
+		std::cout << "finish\n";
+	} else if (custom_init() != 0){
+		printf("single_client: custom_init: failed\n");
+		return -1;
+	}
+
+	return 0;
 }
 
 SingleClient::~SingleClient()
@@ -89,7 +138,7 @@ SingleClient::~SingleClient()
 	// save position map and stash to disk
 }
 
-int SingleClient::put(const std::string &key_name, const std::array<uint8_t, BYTES_PER_BLOCK> &value)
+int SingleClient::put(const std::string &key_name, const std::array<uint8_t, BYTES_PER_DATA> &value)
 {
 	// if key does not exist yet, add new entry
 	if (key_to_block_id.find(key_name) == key_to_block_id.end()) {
@@ -121,7 +170,7 @@ int SingleClient::put(const std::string &key_name, const std::array<uint8_t, BYT
 	}
 
 	// perform swaps
-	std::array<uint8_t, BYTES_PER_BLOCK> value_buffer = value;
+	std::array<uint8_t, BYTES_PER_DATA> value_buffer = value;
 	traverse_branch(requested_block_id, WRITE, &value_buffer);
 
 	// send branch back
@@ -147,7 +196,7 @@ int SingleClient::put(const std::string &key_name, const std::array<uint8_t, BYT
 	return 0;
 }
 
-int SingleClient::get(const std::string &key_name, std::array<uint8_t, BYTES_PER_BLOCK> &value)
+int SingleClient::get(const std::string &key_name, std::array<uint8_t, BYTES_PER_DATA> &value)
 {
 	if (key_to_block_id.find(key_name) == key_to_block_id.end()) {
 #ifdef DEBUG
@@ -175,7 +224,7 @@ int SingleClient::get(const std::string &key_name, std::array<uint8_t, BYTES_PER
 	}
 
 	// perform swaps
-	std::array<uint8_t, BYTES_PER_BLOCK> value_buffer = {0};
+	std::array<uint8_t, BYTES_PER_DATA> value_buffer = {0};
 	traverse_branch(requested_block_id, READ, &value_buffer);
 
 	// send branch back
@@ -197,7 +246,7 @@ int SingleClient::get(const std::string &key_name, std::array<uint8_t, BYTES_PER
 	std::cout << "single_client: GET SUCCESS\n";
 #endif
 	store_state();
-	memcpy(value.data(), value_buffer.data(), BYTES_PER_BLOCK);
+	memcpy(value.data(), value_buffer.data(), BYTES_PER_DATA);
 	branch.clear();
 
 	return 0;
@@ -254,10 +303,10 @@ int SingleClient::clear(const std::string &key_name)
 	return 0;
 }
 
-int SingleClient::read_range(const std::string &begin_key_name, const std::string &end_key_name, std::vector<std::array<uint8_t, BYTES_PER_BLOCK>> &data)
+int SingleClient::read_range(const std::string &begin_key_name, const std::string &end_key_name, std::vector<std::array<uint8_t, BYTES_PER_DATA>> &data)
 {
 	for (auto map_iterator = key_to_block_id.lower_bound(begin_key_name); map_iterator != key_to_block_id.upper_bound(end_key_name); ++map_iterator) {
-		std::array<uint8_t, BYTES_PER_BLOCK> data_buffer;
+		std::array<uint8_t, BYTES_PER_DATA> data_buffer;
 		if (get(map_iterator->first, data_buffer) != 0) {
 			std::cerr << "single_client: read_range: failed. " << map_iterator->first << '\n';
 			return -1;
@@ -299,11 +348,14 @@ int SingleClient::fetch_branch(uint16_t leaf_id)
 #endif
 
 	for (uint16_t i = 0; i < num_blocks; ++i) {
-		if (recv(socket_fd, branch[i].get_encrypted_data(), BLOCK_ID_SIZE + BYTES_PER_BLOCK, MSG_WAITALL) != BLOCK_ID_SIZE + BYTES_PER_BLOCK) {
+		if (recv(socket_fd, branch[i].get_encrypted_data(), BLOCK_SIZE, MSG_WAITALL) != BLOCK_SIZE) {
 			perror("single_client: recv: failed");
 			return -1;
 		}
-		branch[i].decrypt(enc_key, enc_iv);
+		if (branch[i].decrypt(enc_key, enc_iv) == -1) {
+			perror("decrypt");
+			return -1;
+		}
 	}
 
 #ifdef DEBUG
@@ -320,7 +372,7 @@ int SingleClient::fetch_branch(uint16_t leaf_id)
 	return 0;
 }
 
-void SingleClient::traverse_branch(uint16_t requested_block_id, enum Operation op, std::array<uint8_t, BYTES_PER_BLOCK> *value_buffer)
+void SingleClient::traverse_branch(uint16_t requested_block_id, enum Operation op, std::array<uint8_t, BYTES_PER_DATA> *value_buffer)
 {
 	for (Block &current_block : branch) {
 		if (current_block.get_block_id() == 0)
@@ -328,9 +380,9 @@ void SingleClient::traverse_branch(uint16_t requested_block_id, enum Operation o
 
 		if (current_block.get_block_id() == requested_block_id) {
 			if (op == READ)
-				memcpy(value_buffer->data(), current_block.get_decrypted_data(), BYTES_PER_BLOCK);
+				memcpy(value_buffer->data(), current_block.get_decrypted_data(), BYTES_PER_DATA);
 			else if (op == WRITE)
-				memcpy(current_block.get_decrypted_data(), value_buffer->data(), BYTES_PER_BLOCK);
+				memcpy(current_block.get_decrypted_data(), value_buffer->data(), BYTES_PER_DATA);
 			else if (op == CLEAR)
 				current_block.set_block_id(0);
 
@@ -349,7 +401,7 @@ void SingleClient::traverse_branch(uint16_t requested_block_id, enum Operation o
 			// store in stash
 			// free current block
 
-			memcpy(stash[current_block.get_block_id()].data(), current_block.get_decrypted_data(), BYTES_PER_BLOCK);
+			memcpy(stash[current_block.get_block_id()].data(), current_block.get_decrypted_data(), BYTES_PER_DATA);
 #ifdef DEBUG
 			std::cout << "wrote block " << current_block.get_block_id() << " to stash\n";
 #endif
@@ -369,7 +421,7 @@ void SingleClient::traverse_branch(uint16_t requested_block_id, enum Operation o
 			// store in stash
 			// free current block
 
-			memcpy(stash[current_block.get_block_id()].data(), current_block.get_decrypted_data(), BYTES_PER_BLOCK);
+			memcpy(stash[current_block.get_block_id()].data(), current_block.get_decrypted_data(), BYTES_PER_DATA);
 #ifdef DEBUG
 			std::cout << "wrote block " << current_block.get_block_id() << " to stash\n";
 #endif
@@ -383,9 +435,9 @@ void SingleClient::traverse_branch(uint16_t requested_block_id, enum Operation o
 		RESTART:
 		if (current_block->first == requested_block_id) {
 			if (op == READ)
-				memcpy(value_buffer->data(), current_block->second.data(), BYTES_PER_BLOCK);
+				memcpy(value_buffer->data(), current_block->second.data(), BYTES_PER_DATA);
 			else if (op == WRITE)
-				memcpy(current_block->second.data(), value_buffer->data(), BYTES_PER_BLOCK);
+				memcpy(current_block->second.data(), value_buffer->data(), BYTES_PER_DATA);
 			else if (op == CLEAR) {
 				stash.erase(current_block);
 				return;
@@ -401,7 +453,7 @@ void SingleClient::traverse_branch(uint16_t requested_block_id, enum Operation o
 #ifdef DEBUG
 					std::cout << "single_client: moved block " << current_block->first << " from stash to branch\n";
 #endif
-					branch[j] = Block(current_block->first, current_block->second.data(), BYTES_PER_BLOCK);
+					branch[j] = Block(current_block->first, current_block->second.data(), BYTES_PER_DATA);
 					stash.erase(current_block);
 					break;
 				}
@@ -414,7 +466,7 @@ void SingleClient::traverse_branch(uint16_t requested_block_id, enum Operation o
 #ifdef DEBUG
 				std::cout << "single_client: moved block " << current_block->first << " from stash to branch\n";
 #endif
-				branch[j] = Block(current_block->first, current_block->second.data(), BYTES_PER_BLOCK);
+				branch[j] = Block(current_block->first, current_block->second.data(), BYTES_PER_DATA);
 				current_block = stash.erase(current_block);
 				goto RESTART;
 			}
@@ -428,11 +480,14 @@ void SingleClient::traverse_branch(uint16_t requested_block_id, enum Operation o
 	position_map[requested_block_id] = rand_leaf_id;
 	for (long j = (idx + 1) * BLOCKS_PER_BUCKET - 1; j >= 0; --j) {
 		if (branch[j].get_block_id() == 0) {
-			branch[j] = Block(requested_block_id, value_buffer->data(), BYTES_PER_BLOCK);
+			branch[j] = Block(requested_block_id, value_buffer->data(), BYTES_PER_DATA);
+#ifdef DEBUG
+			std::cout << "single_client: insert block " << requested_block_id << ", randomized to leaf_id " << rand_leaf_id << ", bucket idx " << idx << '\n';
+#endif
 			return;
 		}
 	}
-	memcpy(stash[requested_block_id].data(), value_buffer->data(), BYTES_PER_BLOCK);
+	memcpy(stash[requested_block_id].data(), value_buffer->data(), BYTES_PER_DATA);
 }
 
 uint16_t SingleClient::find_intersection_bucket(uint16_t leaf_id_1, uint16_t leaf_id_2)
@@ -452,14 +507,20 @@ uint16_t SingleClient::find_intersection_bucket(uint16_t leaf_id_1, uint16_t lea
 int SingleClient::send_branch()
 {
 	for (uint32_t i = 0; i < branch.size() - 1; ++i) {
-		branch[i].encrypt(enc_key, enc_iv);
-		if (send(socket_fd, branch[i].get_encrypted_data(), BLOCK_ID_SIZE + BYTES_PER_BLOCK, MSG_MORE) != BLOCK_ID_SIZE + BYTES_PER_BLOCK) {
+		if (branch[i].encrypt(enc_key, enc_iv) == -1) {
+			perror("encrypt");
+			return -1;
+		}
+		if (send(socket_fd, branch[i].get_encrypted_data(), BLOCK_SIZE, MSG_MORE) != BLOCK_SIZE) {
 			perror("send: failed");
 			return -1;
 		}
 	}
-	branch.back().encrypt(enc_key, enc_iv);
-	if (send(socket_fd, branch.back().get_encrypted_data(), BLOCK_ID_SIZE + BYTES_PER_BLOCK, 0) != BLOCK_ID_SIZE + BYTES_PER_BLOCK) {
+	if (branch.back().encrypt(enc_key, enc_iv) == -1) {
+		perror("encrypt");
+		return -1;
+	}
+	if (send(socket_fd, branch.back().get_encrypted_data(), BLOCK_SIZE, 0) != BLOCK_SIZE) {
 		perror("send: failed");
 		return -1;
 	}
@@ -495,7 +556,7 @@ void SingleClient::store_state()
 		write(state_fd, &size, sizeof(size));
 		for (const auto &pair : stash) {
 			write(state_fd, &pair.first, sizeof(pair.first));
-			write(state_fd, pair.second.data(), BYTES_PER_BLOCK);
+			write(state_fd, pair.second.data(), BYTES_PER_DATA);
 		}
 
 		close(state_fd);

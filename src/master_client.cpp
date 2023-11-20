@@ -47,18 +47,18 @@ int main()
 
 		std::string key1;
 		std::string key2;
-		std::array<uint8_t, BYTES_PER_BLOCK> data_buffer;
+		std::array<uint8_t, BYTES_PER_DATA> data_buffer;
 
 		switch (operation) {
 		case READ:
-			if (receive_key(key1) != 0 || client.get(key1, data_buffer) != 0 || send(client_socket, data_buffer.data(), BYTES_PER_BLOCK, 0) != BYTES_PER_BLOCK) {
+			if (receive_key(key1) != 0 || client.get(key1, data_buffer) != 0 || send(client_socket, data_buffer.data(), BYTES_PER_DATA, 0) != BYTES_PER_DATA) {
 				std::cerr << "master: READ failed\n";
 				close(client_socket);
 				continue;
 			}
 			break;
 		case WRITE:
-			if (receive_key(key1) != 0 || recv(client_socket, data_buffer.data(), BYTES_PER_BLOCK, 0) != BYTES_PER_BLOCK || client.put(key1, data_buffer) != 0) {
+			if (receive_key(key1) != 0 || recv(client_socket, data_buffer.data(), BYTES_PER_DATA, 0) != BYTES_PER_DATA || client.put(key1, data_buffer) != 0) {
 				std::cerr << "master: WRITE failed\n";
 				close(client_socket);
 				continue;
@@ -72,7 +72,7 @@ int main()
 			}
 			break;
 		case READ_RANGE: {
-			std::vector<std::array<uint8_t, BYTES_PER_BLOCK>> blocks;
+			std::vector<std::array<uint8_t, BYTES_PER_DATA>> blocks;
 			if (receive_key(key1) != 0 || receive_key(key2) != 0 || client.read_range(key1, key2, blocks)) {
 				std::cerr << "master: READ_RANGE failed\n";
 				close(client_socket);
@@ -85,7 +85,7 @@ int main()
 				continue;
 			}
 			for (uint32_t i = 0; i < num_blocks; ++i) {
-				if (send(client_socket, blocks[i].data(), BYTES_PER_BLOCK, 0) != BYTES_PER_BLOCK) {
+				if (send(client_socket, blocks[i].data(), BYTES_PER_DATA, 0) != BYTES_PER_DATA) {
 					perror("master: READ_RANGE failed");
 					close(client_socket);
 					continue;

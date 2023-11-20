@@ -9,9 +9,11 @@
 #include <openssl/evp.h>
 #include <openssl/aes.h>
 
-#define BYTES_PER_BLOCK 1024
+#define BYTES_PER_DATA 1022
 #define BLOCKS_PER_BUCKET 3
-#define BLOCK_ID_SIZE sizeof(uint16_t)
+#define BYTES_PER_BLOCKID sizeof(uint16_t)
+#define BLOCK_SIZE (BYTES_PER_BLOCKID + BYTES_PER_DATA)
+#define BUCKETS_PER_TREE 0xffff
 
 class Block {
 public:
@@ -38,10 +40,10 @@ private:
 	union bytes {
 		struct __attribute__((__packed__)) {
 			uint16_t block_id;
-			uint8_t data[BYTES_PER_BLOCK];
+			uint8_t data[BYTES_PER_DATA];
 		} data_dec;
 		struct __attribute__((__packed__)) {
-			uint8_t data[BLOCK_ID_SIZE + BYTES_PER_BLOCK];
+			uint8_t data[BLOCK_SIZE];
 		} data_enc;
 	} bytes;
 };
