@@ -1,5 +1,12 @@
 #include "single_client.h"
 
+#ifdef DEBUG
+	#include <error.h>
+	#define ERROR(function) error_at_line(0, errno, __FILE__, __LINE__, "%s: %s failed", __func__, function);
+#else
+	#define ERROR(function)
+#endif
+
 static std::random_device generator;
 static std::uniform_int_distribution<int> oram_random(1, 32768); // [1, 2^15]
 
@@ -9,7 +16,7 @@ int SingleClient::initialize(const std::string &server_ip, const int port, int (
 {
 /*
 	if (access(".oram_enc", F_OK) != 0) {
-		perror("single_client: access: .oram_enc");
+		ERROR("single_client: access: .oram_enc");
 		return -1
 	}
 */
@@ -20,7 +27,7 @@ int SingleClient::initialize(const std::string &server_ip, const int port, int (
 	if (access(".oram_state", F_OK) == 0) {
 		int state_fd;
 		if ( (state_fd = open(".oram_state", O_RDONLY | O_CREAT, 0666)) == -1) {
-			std::cerr << "single_client: open state: failed " << errno << '\n';
+			ERROR("open");
 			return -1;
 		}
 
@@ -59,7 +66,7 @@ int SingleClient::initialize(const std::string &server_ip, const int port, int (
 	}
 
 	if ( (socket_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0 ) {
-		printf("socket: failed\n");
+		ERROR("socket");
 		return -1;
 	}
 
@@ -67,13 +74,13 @@ int SingleClient::initialize(const std::string &server_ip, const int port, int (
 	server_addr.sin_port = htons(port);
 
 	if (inet_pton(AF_INET, server_ip.c_str(), &server_addr.sin_addr) <= 0) {
-		printf("inet_pton: failed\n");
-		//close(socket_fd);
+		ERROR("inet_pton");
+		close(socket_fd);
 		return -1;
 	}
 
 	if (connect(socket_fd, (struct sockaddr *) &server_addr, sizeof(server_addr)) < 0 ) {
-		printf("single_client: connect: failed\n");
+		ERROR("connect");
 		return -1;
 	}
 #ifdef DEBUG
@@ -82,7 +89,7 @@ int SingleClient::initialize(const std::string &server_ip, const int port, int (
 
 	uint8_t fdb_is_initialized;
 	if (recv(socket_fd, &fdb_is_initialized, sizeof(fdb_is_initialized), 0) != sizeof(fdb_is_initialized)) {
-		perror("send: failed");
+		ERROR("send");
 		return -1;
 	}
 
@@ -98,11 +105,11 @@ int SingleClient::initialize(const std::string &server_ip, const int port, int (
 			}
 			Block block(0, random_data, BYTES_PER_DATA);
 			if (block.encrypt(enc_key, enc_iv) == -1) {
-				perror("single_client: encrypt");
+				ERROR("encrypt");
 				return -1;
 			}
 			if (send(socket_fd, block.get_encrypted_data(), BLOCK_SIZE, MSG_MORE) != BLOCK_SIZE) {
-				perror("single_client: send");
+				ERROR("send");
 				return -1;
 			}
 		}
@@ -112,16 +119,15 @@ int SingleClient::initialize(const std::string &server_ip, const int port, int (
 		}
 		Block block(0, random_data, BYTES_PER_DATA);
 		if (block.encrypt(enc_key, enc_iv) == -1) {
-			perror("single_client: encrypt");
+			ERROR("encrypt");
 			return -1;
 		}
 		if (send(socket_fd, block.get_encrypted_data(), BLOCK_SIZE, 0) != BLOCK_SIZE) {
-			perror("single_client: send");
+			ERROR("send");
 			return -1;
 		}
-		std::cout << "finish\n";
 	} else if (custom_init() != 0){
-		printf("single_client: custom_init: failed\n");
+		ERROR("custom_init");
 		return -1;
 	}
 
@@ -155,7 +161,7 @@ int SingleClient::put(const std::string &key_name, const std::array<uint8_t, BYT
 	
 	uint16_t request_id = oram_random(generator);
 	if (send(socket_fd, &request_id, sizeof(request_id), 0) != sizeof(request_id)) {
-		perror("single_client: send: failed");
+		ERROR("send");
 		close(socket_fd);
 		return -1;
 	}
@@ -164,7 +170,7 @@ int SingleClient::put(const std::string &key_name, const std::array<uint8_t, BYT
 #endif
 
 	if (fetch_branch(position_map[requested_block_id]) == -1) {
-		std::cerr << "single_client: fetch_branch: failed" << std::endl;
+		ERROR("fetch_branch");
 		close(socket_fd);
 		return -1;
 	}
@@ -175,7 +181,7 @@ int SingleClient::put(const std::string &key_name, const std::array<uint8_t, BYT
 
 	// send branch back
 	if (send_branch() == -1) {
-		std::cerr << "single_client: send_branch: failed\n";
+		ERROR("send_branch");
 		close(socket_fd);
 		return -1;
 	}
@@ -183,7 +189,7 @@ int SingleClient::put(const std::string &key_name, const std::array<uint8_t, BYT
 	// confirm the operation completed
 	uint16_t confirmation_id = 0;
 	if (recv(socket_fd, &confirmation_id, sizeof(confirmation_id), 0) != sizeof(confirmation_id) || confirmation_id != request_id) {
-		perror("single_client: recv: failed");
+		ERROR("recv");
 		close(socket_fd);
 		return -1;
 	}
@@ -209,7 +215,7 @@ int SingleClient::get(const std::string &key_name, std::array<uint8_t, BYTES_PER
 
 	uint16_t request_id = oram_random(generator);
 	if (send(socket_fd, &request_id, sizeof(request_id), 0) != sizeof(request_id)) {
-		perror("single_client: send: failed");
+		ERROR("send");
 		close(socket_fd);
 		return -1;
 	}
@@ -218,7 +224,7 @@ int SingleClient::get(const std::string &key_name, std::array<uint8_t, BYTES_PER
 #endif
 
 	if (fetch_branch(position_map[requested_block_id]) == -1) {
-		std::cerr << "single_client: fetch_branch: failed" << std::endl;
+		ERROR("fetch_branch");
 		close(socket_fd);
 		return -1;
 	}
@@ -229,7 +235,7 @@ int SingleClient::get(const std::string &key_name, std::array<uint8_t, BYTES_PER
 
 	// send branch back
 	if (send_branch() == -1) {
-		std::cerr << "single_client: send_branch: failed\n";
+		ERROR("send_branch");
 		close(socket_fd);
 		return -1;
 	}
@@ -237,7 +243,7 @@ int SingleClient::get(const std::string &key_name, std::array<uint8_t, BYTES_PER
 	// confirm the operation completed
 	uint16_t confirmation_id = 0;
 	if (recv(socket_fd, &confirmation_id, sizeof(confirmation_id), 0) != sizeof(confirmation_id) || confirmation_id != request_id) {
-		perror("single_client: recv: failed");
+		ERROR("recv");
 		close(socket_fd);
 		return -1;
 	}
@@ -261,7 +267,7 @@ int SingleClient::clear(const std::string &key_name)
 	
 	uint16_t request_id = oram_random(generator);
 	if (send(socket_fd, &request_id, sizeof(request_id), 0) != sizeof(request_id)) {
-		perror("single_client: send: failed");
+		ERROR("send");
 		close(socket_fd);
 		return -1;
 	}
@@ -270,7 +276,7 @@ int SingleClient::clear(const std::string &key_name)
 #endif
 
 	if (fetch_branch(position_map[requested_block_id]) == -1) {
-		std::cerr << "single_client: fetch_branch: failed" << std::endl;
+		ERROR("fetch_branch");
 		close(socket_fd);
 		return -1;
 	}
@@ -280,7 +286,7 @@ int SingleClient::clear(const std::string &key_name)
 
 	// send branch back
 	if (send_branch() == -1) {
-		std::cerr << "single_client: send_branch: failed\n";
+		ERROR("send_branch");
 		close(socket_fd);
 		return -1;
 	}
@@ -288,7 +294,7 @@ int SingleClient::clear(const std::string &key_name)
 	// confirm the operation completed
 	uint16_t confirmation_id = 0;
 	if (recv(socket_fd, &confirmation_id, sizeof(confirmation_id), 0) != sizeof(confirmation_id) || confirmation_id != request_id) {
-		perror("single_client: recv: failed");
+		ERROR("recv");
 		close(socket_fd);
 		return -1;
 	}
@@ -308,7 +314,7 @@ int SingleClient::read_range(const std::string &begin_key_name, const std::strin
 	for (auto map_iterator = key_to_block_id.lower_bound(begin_key_name); map_iterator != key_to_block_id.upper_bound(end_key_name); ++map_iterator) {
 		std::array<uint8_t, BYTES_PER_DATA> data_buffer;
 		if (get(map_iterator->first, data_buffer) != 0) {
-			std::cerr << "single_client: read_range: failed. " << map_iterator->first << '\n';
+			ERROR("get");
 			return -1;
 		}
 		data.push_back(data_buffer);
@@ -320,7 +326,7 @@ int SingleClient::clear_range(const std::string &begin_key_name, const std::stri
 {
 	for (auto map_iterator = key_to_block_id.lower_bound(begin_key_name); map_iterator != key_to_block_id.upper_bound(end_key_name); ++map_iterator) {
 		if (clear(map_iterator->first) != 0) {
-			std::cerr << "single_client: clear_range: failed. " << map_iterator->first << '\n';
+			ERROR("clear");
 			return -1;
 		}
 	}
@@ -330,7 +336,7 @@ int SingleClient::clear_range(const std::string &begin_key_name, const std::stri
 int SingleClient::fetch_branch(uint16_t leaf_id)
 {
 	if (send(socket_fd, &leaf_id, sizeof(leaf_id), 0) != sizeof(leaf_id)) {
-		perror("single_client: send: failed");
+		ERROR("send");
 		return -1;
 	}
 #ifdef DEBUG
@@ -339,7 +345,7 @@ int SingleClient::fetch_branch(uint16_t leaf_id)
 
 	uint16_t num_blocks;
 	if (recv(socket_fd, &num_blocks, sizeof(num_blocks), 0) != sizeof(num_blocks)) {
-		perror("single_client: recv: failed");
+		ERROR("recv");
 		return -1;
 	}
 	branch.resize(num_blocks);
@@ -349,11 +355,11 @@ int SingleClient::fetch_branch(uint16_t leaf_id)
 
 	for (uint16_t i = 0; i < num_blocks; ++i) {
 		if (recv(socket_fd, branch[i].get_encrypted_data(), BLOCK_SIZE, MSG_WAITALL) != BLOCK_SIZE) {
-			perror("single_client: recv: failed");
+			ERROR("recv");
 			return -1;
 		}
 		if (branch[i].decrypt(enc_key, enc_iv) == -1) {
-			perror("decrypt");
+			ERROR("decrypt");
 			return -1;
 		}
 	}
@@ -508,20 +514,20 @@ int SingleClient::send_branch()
 {
 	for (uint32_t i = 0; i < branch.size() - 1; ++i) {
 		if (branch[i].encrypt(enc_key, enc_iv) == -1) {
-			perror("encrypt");
+			ERROR("encrypt");
 			return -1;
 		}
 		if (send(socket_fd, branch[i].get_encrypted_data(), BLOCK_SIZE, MSG_MORE) != BLOCK_SIZE) {
-			perror("send: failed");
+			ERROR("send");
 			return -1;
 		}
 	}
 	if (branch.back().encrypt(enc_key, enc_iv) == -1) {
-		perror("encrypt");
+		ERROR("encrypt");
 		return -1;
 	}
 	if (send(socket_fd, branch.back().get_encrypted_data(), BLOCK_SIZE, 0) != BLOCK_SIZE) {
-		perror("send: failed");
+		ERROR("send");
 		return -1;
 	}
 #ifdef DEBUG
@@ -561,6 +567,6 @@ void SingleClient::store_state()
 
 		close(state_fd);
 	} else {
-		std::cerr << "single_client: failed to open the output file\n";
+		ERROR("open");
 	}
 }

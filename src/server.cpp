@@ -12,16 +12,18 @@
 #include <arpa/inet.h>
 #include <sys/time.h>
 
+#ifdef DEBUG
+	#include <error.h>
+	#define ERROR(function) error_at_line(0, errno, __FILE__, __LINE__, "%s: %s failed", __func__, function);
+#else
+	#define ERROR(function)
+#endif
+
 #define PORT 8080
 
 #define FDB_API_VERSION 710
 #include <foundationdb/fdb_c.h>
 
-void printBinaryBuffer(const uint8_t* buffer, size_t size) {
-	for (size_t i = 0; i < size; ++i) {
-		printf("\\x%02X", buffer[i]);
-	}
-}
 inline int setup_socket(int &server_socket, struct sockaddr_in &address, pthread_t &network_thread);
 inline int setup_fdb();
 inline int get_branch_indexes(std::vector<uint16_t> &branch_indexes, uint16_t leaf_id);
@@ -34,7 +36,7 @@ inline void close_connection();
 void *run_network(void *arg)
 {
 	if (fdb_run_network() != 0) {
-		std::cerr << "fdb_run_network: failed\n";
+		ERROR("fdb_run_network");
 		exit(EXIT_FAILURE);
 	}
 	return arg;
@@ -48,9 +50,6 @@ static std::random_device generator;
 static std::uniform_int_distribution<uint8_t> random_byte(0, 0xff);
 uint8_t fdb_is_initialized = 0;
 
-uint8_t *enc_key = (uint8_t *) "0123456789abcdeF0123456789abcdeF";
-uint8_t *enc_iv = (uint8_t *) "1234567890abcdef";
-
 int main()
 {
 	int server_socket;
@@ -60,14 +59,14 @@ int main()
 
 	pthread_t network_thread;
 	if (setup_socket(server_socket, server_addr, network_thread) != 0) {
-		std::cerr << "setup_socket: failed\n";
+		ERROR("setup_socket");
 		exit(EXIT_FAILURE);
 	}
 
 	while (1) {
 		LISTEN:
 		if ( (client_socket = accept(server_socket, (struct sockaddr *) &client_addr, &client_addr_len)) < 0 ) {
-			std::cerr << "server: accept: failed\n";
+			ERROR("accept");
 			continue;
 		}
 		char client_ip[INET_ADDRSTRLEN] = {0};
@@ -77,7 +76,7 @@ int main()
 #endif
 
 		if (setup_fdb() != 0) {
-			std::cerr << "setup_fdb: failed\n";
+			ERROR("setup_fdb");
 			exit(EXIT_FAILURE);
 		}
 
@@ -93,7 +92,7 @@ int main()
 			case sizeof(request_id):
 				break;
 			default:
-				perror("server: recv: failed");
+				ERROR("recv");
 				close_connection();
 				goto LISTEN;
 			}
@@ -104,7 +103,7 @@ int main()
 			// receive leaf_id
 			uint16_t leaf_id;
 			if (recv(client_socket, &leaf_id, sizeof(leaf_id), 0) != sizeof(leaf_id)) {
-				perror("server: recv: failed");
+				ERROR("recv");
 				close_connection();
 				continue;
 			}
@@ -115,7 +114,7 @@ int main()
 			// contains indexes that correspond to nodes on the branch
 			std::vector<uint16_t> branch_indexes;
 			if (get_branch_indexes(branch_indexes, leaf_id) != 0) {
-				std::cerr << "server: get_branch_indexes: failed";
+				ERROR("get_branch_indexes");
 				close_connection();
 				continue;
 			}
@@ -123,7 +122,7 @@ int main()
 			// send number of blocks to send
 			uint16_t num_blocks = branch_indexes.size() * BLOCKS_PER_BUCKET;
 			if (send(client_socket, &num_blocks, sizeof(num_blocks), 0) != sizeof(num_blocks)) {
-				perror("server: send: failed");
+				ERROR("send");
 				close_connection();
 				continue;
 			}
@@ -134,7 +133,7 @@ int main()
 			// retrieve vector<Block> from fdb
 			std::vector<Block> branch(num_blocks);
 			if (get_branch_from_fdb(branch, branch_indexes) != 0) {
-				std::cerr << "server: get_branch_from fdb\n";
+				ERROR("get_branch_from_fdb");
 				close_connection();
 				continue;
 			}
@@ -143,28 +142,28 @@ int main()
 #endif
 
 			if (send_branch_to_client(branch) != 0) {
-				perror("server: send_branch_to_client: failed");
+				ERROR("send_branch_to_client");
 				close_connection();
 				continue;
 			}
 
 			// receive updated blocks from client
 			if (receive_updated_blocks(branch) != 0) {
-				std::cerr << "server: receive_updated_blocks: failed\n";
+				ERROR("receive_updated_blocks");
 				close_connection();
 				continue;
 			}
 
 			// send updated blocks to fdb
 			if (send_branch_to_fdb(branch, branch_indexes) != 0) {
-				perror("server: send_branch_to_fdb: failed");
+				ERROR("send_branch_to_fdb");
 				close_connection();
 				continue;
 			}
 
 			// send acknowledgement of successful operation
 			if (send(client_socket, &request_id, sizeof(request_id), 0) != sizeof(request_id)) {
-				perror("server: send: failed acknowledgement");
+				ERROR("acknowledgement");
 				close_connection();
 				continue;
 			}
@@ -191,7 +190,7 @@ int main()
 	shutdown(server_socket, SHUT_RDWR);
 
 	if (fdb_stop_network() != 0) {
-		std::cerr << "server: fdb_stop_network: failed\n";
+		ERROR("fdb_stop_network");
 		exit(EXIT_FAILURE);
 	}
 	pthread_join(network_thread, NULL);
@@ -203,13 +202,13 @@ int main()
 inline int setup_socket(int &server_socket, struct sockaddr_in &address, pthread_t &network_thread)
 {
 	if ( (server_socket = socket(AF_INET, SOCK_STREAM, 0)) < 0 ) {
-		std::cerr << "server: socket: failed\n";
+		ERROR("socket");
 		return -1;
 	}
 
 	int opt = 1;
 	if (setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
-		std::cerr << "server: setsockopt: failed\n";
+		ERROR("setsockopt");
 		close(server_socket);
 		return -1;
 	}
@@ -220,13 +219,13 @@ inline int setup_socket(int &server_socket, struct sockaddr_in &address, pthread
 	address.sin_port = htons(PORT);
 	
 	if (bind(server_socket, (struct sockaddr *) &address, sizeof(address)) < 0) {
-		std::cerr << "server: bind: failed\n";
+		ERROR("bind");
 		close(server_socket);
 		return -1;
 	}
 
 	if (listen(server_socket, 3) < 0) {
-		std::cerr << "server: listen: failed\n";
+		ERROR("listen");
 		close(server_socket);
 		return -1;
 	}
@@ -234,17 +233,17 @@ inline int setup_socket(int &server_socket, struct sockaddr_in &address, pthread
 	fdb_select_api_version(FDB_API_VERSION);
 
 	if (fdb_setup_network() != 0) {
-		std::cerr << "fdb_setup_network: failed\n";
+		ERROR("fdb_setup_network");
 		return -1;
 	}
 
 	if (pthread_create(&network_thread, NULL, run_network, NULL) != 0) {
-		std::cerr << "pthread_create: failed\n";
+		ERROR("pthread_create");
 		return -1;
 	}
 
 	if (fdb_create_database(NULL, &db) != 0) {
-		std::cerr << "fdb_create_database: failed\n";
+		ERROR("fdb_create_database");
 		return -1;
 	}
 
@@ -255,7 +254,7 @@ inline int setup_fdb()
 {
 	// check if tree was initiated already by checking if key: \x01 = value: \x01
 	if (fdb_database_create_transaction(db, &tr) != 0) {
-		std::cerr << "fdb_database_create_transaction: failed\n";
+		ERROR("fdb_database_create_transaction");
 		return -1;
 	}
 
@@ -263,11 +262,11 @@ inline int setup_fdb()
 	status = fdb_transaction_get(tr, &key, sizeof(key), 0);
 
 	if ((fdb_future_block_until_ready(status)) != 0) {
-		std::cerr << "fdb_future_block_until_ready: failed\n";
+		ERROR("fdb_future_block_until_ready");
 		return -1;
 	}
 	if (fdb_future_get_error(status)) {
-		std::cerr << "fdb_future_is_error: its an error...\n";
+		ERROR("fdb_future_get_error");
 		return -1;
 	}
 
@@ -280,11 +279,11 @@ inline int setup_fdb()
 		else
 			fdb_is_initialized = 1;
 		if (send(client_socket, &fdb_is_initialized, sizeof(fdb_is_initialized), 0) != sizeof(fdb_is_initialized)) {
-			perror("send: failed");
+			ERROR("send");
 			return -1;
 		}
 	} else {
-		std::cerr << "fdb_future_get_value: failed\n";
+		ERROR("fdb_future_get_value");
 		return -1;
 	}
 	fdb_future_destroy(status);
@@ -295,7 +294,7 @@ inline int setup_fdb()
 	if (!fdb_is_initialized) {
 		tr = NULL;
 		if (fdb_database_create_transaction(db, &tr) != 0) {
-			std::cerr << "fdb_database_create_transaction: failed\n";
+			ERROR("fdb_database_create_transaction");
 			return -1;
 		}
 
@@ -308,7 +307,7 @@ inline int setup_fdb()
 			for (int block_idx = 0; block_idx < BLOCKS_PER_BUCKET; ++block_idx) {
 				Block block;
 				if (recv(client_socket, block.get_encrypted_data(), BLOCK_SIZE, MSG_WAITALL) != BLOCK_SIZE) {
-					perror("server: recv");
+					ERROR("recv");
 					return -1;
 				}
 				memcpy(bucket + BLOCK_SIZE * block_idx, block.get_encrypted_data(), BLOCK_SIZE);
@@ -319,12 +318,12 @@ inline int setup_fdb()
 			if (tree_index % 3000 == 0) {
 				status = fdb_transaction_commit(tr);
 				if ((fdb_future_block_until_ready(status)) != 0) {
-					std::cerr << "fdb_future_block_until_ready: failed\n";
+					ERROR("fdb_future_block_until_ready");
 					return -1;
 				}
 				int error = fdb_future_get_error(status);
 				if (error != 0) {
-					std::cerr << "fdb_future_get_error: " << error << '\n';
+					ERROR("fdb_future_get_error");
 					return -1;
 				}
 				fdb_future_destroy(status);
@@ -332,7 +331,7 @@ inline int setup_fdb()
 				status = NULL;
 				tr = NULL;
 				if (fdb_database_create_transaction(db, &tr) != 0) {
-					std::cerr << "fdb_database_create_transaction: failed\n";
+					ERROR("fdb_database_create_transaction");
 					return -1;
 				}
 
@@ -344,12 +343,12 @@ inline int setup_fdb()
 
 		status = fdb_transaction_commit(tr);
 		if ((fdb_future_block_until_ready(status)) != 0) {
-			std::cerr << "fdb_future_block_until_ready: failed\n";
+			ERROR("fdb_future_block_until_ready");
 			return -1;
 		}
 		int error = fdb_future_get_error(status);
 		if (error != 0) {
-			std::cerr << "fdb_future_get_error: " << error << '\n';
+			ERROR("fdb_future_get_error");
 			return -1;
 		}
 		fdb_future_destroy(status);
@@ -358,18 +357,18 @@ inline int setup_fdb()
 		
 		tr = NULL;
 		if (fdb_database_create_transaction(db, &tr) != 0) {
-			std::cerr << "fdb_database_create_transaction: failed\n";
+			ERROR("fdb_database_create_transaction");
 			return -1;
 		}
 		fdb_transaction_set(tr, &key, sizeof(key), &key, sizeof(key));
 		status = fdb_transaction_commit(tr);
 		if ((fdb_future_block_until_ready(status)) != 0) {
-			std::cerr << "fdb_future_block_until_ready: failed\n";
+			ERROR("fdb_future_block_until_ready");
 			return -1;
 		}
 		error = fdb_future_get_error(status);
 		if (error != 0) {
-			std::cerr << "fdb_future_get_error: " << error << '\n';
+			ERROR("fdb_future_get_error");
 			return -1;
 		}
 		fdb_future_destroy(status);
@@ -403,7 +402,7 @@ inline int get_branch_from_fdb(std::vector<Block> &branch, std::vector<uint16_t>
 	for (uint16_t current_bucket = 0; current_bucket < branch.size() / BLOCKS_PER_BUCKET; ++current_bucket) {
 		// create transaction
 		if (fdb_database_create_transaction(db, &tr) != 0) {
-			std::cerr << "server: fdb_database_create_transaction: failed\n";
+			ERROR("fdb_database_create_transaction");
 			return -1;
 		}
 
@@ -414,11 +413,11 @@ inline int get_branch_from_fdb(std::vector<Block> &branch, std::vector<uint16_t>
 		temp[2] = branch_indexes[current_bucket] & 0x00ff;
 		status = fdb_transaction_get(tr, temp, sizeof(temp), 0);
 		if (fdb_future_block_until_ready(status) != 0) {
-			std::cerr << "server: fdb_future_block_until_ready: failed\n";
+			ERROR("fdb_future_block_until_ready");
 			return -1;
 		}
 		if (fdb_future_get_error(status)) {
-			std::cerr << "server: fdb_future_is_error: its an error...\n";
+ 			ERROR("fdb_future_is_error");
 			return -1;
 		}
 
@@ -434,7 +433,7 @@ inline int get_branch_from_fdb(std::vector<Block> &branch, std::vector<uint16_t>
 			} else {
 			}
 		} else {
-			std::cerr << "server: fdb_future_get_value: failed\n";
+			ERROR("fdb_future_get_value");
 			return -1;
 		}
 
@@ -452,12 +451,12 @@ inline int send_branch_to_client(std::vector<Block> &branch)
 	// send all data in branch
 	for (uint32_t i = 0; i < branch.size() - 1; ++i) {
 		if (send(client_socket, branch[i].get_encrypted_data(), BLOCK_SIZE, MSG_MORE) != BLOCK_SIZE) {
-			perror("server: send: failed");
+			ERROR("send");
 			return -1;
 		}
 	}
 	if (send(client_socket, branch.back().get_encrypted_data(), BLOCK_SIZE, 0) != BLOCK_SIZE) {
-		perror("server: send: failed");
+		ERROR("send");
 		return -1;
 	}
 #ifdef DEBUG
@@ -472,7 +471,7 @@ inline int receive_updated_blocks(std::vector<Block> &branch)
 	// receive + update all data from branch
 	for (uint32_t i = 0; i < branch.size(); ++i) {
 		if (recv(client_socket, branch[i].get_encrypted_data(), BLOCK_SIZE, MSG_WAITALL) != BLOCK_SIZE) {
-			perror("server: recv: failed");
+			ERROR("recv");
 			return -1;
 		}
 	}
@@ -487,7 +486,7 @@ inline int send_branch_to_fdb(std::vector<Block> &branch, std::vector<uint16_t> 
 {
 	// create transaction
 	if (fdb_database_create_transaction(db, &tr) != 0) {
-		std::cerr << "server: fdb_database_create_transaction: failed\n";
+		ERROR("fdb_database_create_transaction");
 		return -1;
 	}
 
@@ -508,11 +507,11 @@ inline int send_branch_to_fdb(std::vector<Block> &branch, std::vector<uint16_t> 
 
 	status = fdb_transaction_commit(tr);
 	if ((fdb_future_block_until_ready(status)) != 0) {
-		std::cerr << "server: fdb_future_block_until_ready: failed\n";
+		ERROR("fdb_future_block_until_ready");
 		return -1;
 	}
 	if (fdb_future_get_error(status)) {
-		std::cerr << "server: fdb_future_is_error: its an error...\n";
+		ERROR("fdb_future_get_error");
 		return -1;
 	}
 	fdb_future_destroy(status);
