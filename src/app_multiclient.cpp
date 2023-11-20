@@ -12,7 +12,7 @@ int main()
 		//struct timeval start_time, end_time;
 		std::string option;
 		std::string key;
-		std::array<uint8_t, BYTES_PER_BLOCK> data;
+		std::array<uint8_t, BYTES_PER_DATA> data;
 		data.fill(0);
 
 		std::cout << "ORAMcli$ ";

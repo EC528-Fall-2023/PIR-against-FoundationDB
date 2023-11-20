@@ -31,10 +31,10 @@ public:
 	MultiClient(const std::string &server_ip = "127.0.0.1", const int port = 8081);
 	~MultiClient();
 
-	int put(const std::string &key_name, const std::array<uint8_t, BYTES_PER_BLOCK> &value);
-	int get(const std::string &key_name, std::array<uint8_t, BYTES_PER_BLOCK> &value);
+	int put(const std::string &key_name, const std::array<uint8_t, BYTES_PER_DATA> &value);
+	int get(const std::string &key_name, std::array<uint8_t, BYTES_PER_DATA> &value);
 	int clear(const std::string &key_name);
-	int read_range(const std::string &begin_key_name, const std::string &end_key_name, std::vector<std::array<uint8_t, BYTES_PER_BLOCK>> &data);
+	int read_range(const std::string &begin_key_name, const std::string &end_key_name, std::vector<std::array<uint8_t, BYTES_PER_DATA>> &data);
 	int clear_range(const std::string &begin_key_name, const std::string &end_key_name);
 
 private:

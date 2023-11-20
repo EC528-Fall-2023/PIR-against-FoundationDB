@@ -17,8 +17,13 @@
 #define FDB_API_VERSION 710
 #include <foundationdb/fdb_c.h>
 
-inline int setup_socket(int &server_socket, struct sockaddr_in &address);
-inline int setup_fdb(pthread_t &network_thread);
+void printBinaryBuffer(const uint8_t* buffer, size_t size) {
+	for (size_t i = 0; i < size; ++i) {
+		printf("\\x%02X", buffer[i]);
+	}
+}
+inline int setup_socket(int &server_socket, struct sockaddr_in &address, pthread_t &network_thread);
+inline int setup_fdb();
 inline int get_branch_indexes(std::vector<uint16_t> &branch_indexes, uint16_t leaf_id);
 inline int get_branch_from_fdb(std::vector<Block> &branch, std::vector<uint16_t> &branch_indexes);
 inline int send_branch_to_client(std::vector<Block> &branch);
@@ -41,39 +46,23 @@ struct FDB_transaction *tr = NULL;
 struct FDB_future *status = NULL;
 static std::random_device generator;
 static std::uniform_int_distribution<uint8_t> random_byte(0, 0xff);
-bool fdb_is_initialized = false;
+uint8_t fdb_is_initialized = 0;
+
+uint8_t *enc_key = (uint8_t *) "0123456789abcdeF0123456789abcdeF";
+uint8_t *enc_iv = (uint8_t *) "1234567890abcdef";
 
 int main()
 {
 	int server_socket;
 	struct sockaddr_in server_addr, client_addr;
 
-#ifdef DEBUG
-	struct timeval start_time, end_time;
-	gettimeofday(&start_time, NULL);
-#endif
-
 	socklen_t client_addr_len = sizeof(client_addr);
 
-	if (setup_socket(server_socket, server_addr) != 0) {
+	pthread_t network_thread;
+	if (setup_socket(server_socket, server_addr, network_thread) != 0) {
 		std::cerr << "setup_socket: failed\n";
 		exit(EXIT_FAILURE);
 	}
-
-	pthread_t network_thread;
-	if (setup_fdb(network_thread) != 0) {
-		std::cerr << "setup_fdb: failed\n";
-		exit(EXIT_FAILURE);
-	}
-
-#ifdef DEBUG
-	gettimeofday(&end_time, NULL);
-	time_t elapsed_seconds = end_time.tv_sec - start_time.tv_sec;
-	if (!fdb_is_initialized)
-		std::cout << "server: " << elapsed_seconds << " seconds on first ever initialization\n";
-	else
-		std::cout << "server: " << elapsed_seconds << " seconds on initialization\n";
-#endif
 
 	while (1) {
 		LISTEN:
@@ -86,6 +75,11 @@ int main()
 #ifdef DEBUG
 		std::cout << "server: connection to " << client_ip << ':' << PORT << " established\n";
 #endif
+
+		if (setup_fdb() != 0) {
+			std::cerr << "setup_fdb: failed\n";
+			exit(EXIT_FAILURE);
+		}
 
 		while (1) {
 			// receive request_id
@@ -206,7 +200,7 @@ int main()
 	return 0;
 }
 
-inline int setup_socket(int &server_socket, struct sockaddr_in &address)
+inline int setup_socket(int &server_socket, struct sockaddr_in &address, pthread_t &network_thread)
 {
 	if ( (server_socket = socket(AF_INET, SOCK_STREAM, 0)) < 0 ) {
 		std::cerr << "server: socket: failed\n";
@@ -237,11 +231,6 @@ inline int setup_socket(int &server_socket, struct sockaddr_in &address)
 		return -1;
 	}
 
-	return 0;
-}
-
-inline int setup_fdb(pthread_t &network_thread)
-{
 	fdb_select_api_version(FDB_API_VERSION);
 
 	if (fdb_setup_network() != 0) {
@@ -259,6 +248,11 @@ inline int setup_fdb(pthread_t &network_thread)
 		return -1;
 	}
 
+	return 0;
+}
+
+inline int setup_fdb()
+{
 	// check if tree was initiated already by checking if key: \x01 = value: \x01
 	if (fdb_database_create_transaction(db, &tr) != 0) {
 		std::cerr << "fdb_database_create_transaction: failed\n";
@@ -281,12 +275,14 @@ inline int setup_fdb(pthread_t &network_thread)
 	const uint8_t *out_value = NULL;
 	int out_value_length = 0;
 	if (fdb_future_get_value(status, &out_present, &out_value, &out_value_length) == 0) {
-		if (out_present == 0)
-			fdb_is_initialized = false;
-		else if (out_value[0] == 1)
-			fdb_is_initialized = true;
+		if (out_present == 0 || out_value[0] == 0)
+			fdb_is_initialized = 0;
 		else
-			fdb_is_initialized = false;
+			fdb_is_initialized = 1;
+		if (send(client_socket, &fdb_is_initialized, sizeof(fdb_is_initialized), 0) != sizeof(fdb_is_initialized)) {
+			perror("send: failed");
+			return -1;
+		}
 	} else {
 		std::cerr << "fdb_future_get_value: failed\n";
 		return -1;
@@ -307,17 +303,18 @@ inline int setup_fdb(pthread_t &network_thread)
 			uint8_t temp[3] = {0};
 			temp[1] = (tree_index & 0xff00) >> 8;
 			temp[2] = tree_index & 0x00ff;
-			uint16_t leaf_id = 0;
-			uint8_t bucket[(BLOCK_ID_SIZE + BYTES_PER_BLOCK) * BLOCKS_PER_BUCKET];
+			uint8_t bucket[BLOCK_SIZE * BLOCKS_PER_BUCKET];
 
-			for (uint32_t i = 0; i < (BLOCK_ID_SIZE + BYTES_PER_BLOCK) * BLOCKS_PER_BUCKET; ++i) {
-				bucket[i] = random_byte(generator);
-			}
-			for (int block = 0; block < BLOCKS_PER_BUCKET; ++block) {
-				memcpy(bucket + (BLOCK_ID_SIZE + BYTES_PER_BLOCK) * block, &leaf_id, sizeof(leaf_id));
+			for (int block_idx = 0; block_idx < BLOCKS_PER_BUCKET; ++block_idx) {
+				Block block;
+				if (recv(client_socket, block.get_encrypted_data(), BLOCK_SIZE, MSG_WAITALL) != BLOCK_SIZE) {
+					perror("server: recv");
+					return -1;
+				}
+				memcpy(bucket + BLOCK_SIZE * block_idx, block.get_encrypted_data(), BLOCK_SIZE);
 			}
 
-			fdb_transaction_set(tr, (const uint8_t *) temp, sizeof(temp), bucket, sizeof(bucket));
+			fdb_transaction_set(tr, (const uint8_t *) temp, sizeof(temp), bucket, BLOCK_SIZE * BLOCKS_PER_BUCKET);
 
 			if (tree_index % 3000 == 0) {
 				status = fdb_transaction_commit(tr);
@@ -344,6 +341,7 @@ inline int setup_fdb(pthread_t &network_thread)
 #endif
 			}
 		}
+
 		status = fdb_transaction_commit(tr);
 		if ((fdb_future_block_until_ready(status)) != 0) {
 			std::cerr << "fdb_future_block_until_ready: failed\n";
@@ -379,7 +377,7 @@ inline int setup_fdb(pthread_t &network_thread)
 		status = NULL;
 		tr = NULL;
 	}
-	fdb_is_initialized = true;
+	fdb_is_initialized = 1;
 	return 0;
 }
 
@@ -431,7 +429,7 @@ inline int get_branch_from_fdb(std::vector<Block> &branch, std::vector<uint16_t>
 		if (fdb_future_get_value(status, &out_present, &out_value, &out_value_length) == 0) {
 			if (out_present) {
 				for (int current_block = 0; current_block < BLOCKS_PER_BUCKET; ++current_block) {
-					branch[current_bucket * BLOCKS_PER_BUCKET + current_block].set_encrypted_data(out_value + current_block * (BYTES_PER_BLOCK + BLOCK_ID_SIZE), BYTES_PER_BLOCK + BLOCK_ID_SIZE);
+					branch[current_bucket * BLOCKS_PER_BUCKET + current_block].set_encrypted_data(out_value + current_block * BLOCK_SIZE, BLOCK_SIZE);
 				}
 			} else {
 			}
@@ -453,12 +451,12 @@ inline int send_branch_to_client(std::vector<Block> &branch)
 {
 	// send all data in branch
 	for (uint32_t i = 0; i < branch.size() - 1; ++i) {
-		if (send(client_socket, branch[i].get_encrypted_data(), BYTES_PER_BLOCK + BLOCK_ID_SIZE, MSG_MORE) != BYTES_PER_BLOCK + BLOCK_ID_SIZE) {
+		if (send(client_socket, branch[i].get_encrypted_data(), BLOCK_SIZE, MSG_MORE) != BLOCK_SIZE) {
 			perror("server: send: failed");
 			return -1;
 		}
 	}
-	if (send(client_socket, branch.back().get_encrypted_data(), BYTES_PER_BLOCK + BLOCK_ID_SIZE, 0) != BYTES_PER_BLOCK + BLOCK_ID_SIZE) {
+	if (send(client_socket, branch.back().get_encrypted_data(), BLOCK_SIZE, 0) != BLOCK_SIZE) {
 		perror("server: send: failed");
 		return -1;
 	}
@@ -473,7 +471,7 @@ inline int receive_updated_blocks(std::vector<Block> &branch)
 {
 	// receive + update all data from branch
 	for (uint32_t i = 0; i < branch.size(); ++i) {
-		if (recv(client_socket, branch[i].get_encrypted_data(), BYTES_PER_BLOCK + BLOCK_ID_SIZE, MSG_WAITALL) != BYTES_PER_BLOCK + BLOCK_ID_SIZE) {
+		if (recv(client_socket, branch[i].get_encrypted_data(), BLOCK_SIZE, MSG_WAITALL) != BLOCK_SIZE) {
 			perror("server: recv: failed");
 			return -1;
 		}
@@ -495,9 +493,9 @@ inline int send_branch_to_fdb(std::vector<Block> &branch, std::vector<uint16_t> 
 
 	for (uint16_t current_bucket = 0; current_bucket < branch.size() / BLOCKS_PER_BUCKET; ++current_bucket) {
 		// construct bucket
-		uint8_t bucket[(BLOCK_ID_SIZE + BYTES_PER_BLOCK) * BLOCKS_PER_BUCKET];
+		uint8_t bucket[BLOCK_SIZE * BLOCKS_PER_BUCKET];
 		for (uint8_t current_block = 0; current_block < BLOCKS_PER_BUCKET; ++current_block) {
-			memcpy(bucket + current_block * (BLOCK_ID_SIZE + BYTES_PER_BLOCK), branch[current_bucket * BLOCKS_PER_BUCKET + current_block].get_encrypted_data(), BLOCK_ID_SIZE + BYTES_PER_BLOCK);
+			memcpy(bucket + current_block * BLOCK_SIZE, branch[current_bucket * BLOCKS_PER_BUCKET + current_block].get_encrypted_data(), BLOCK_SIZE);
 		}
 
 		// send bucket to fdb

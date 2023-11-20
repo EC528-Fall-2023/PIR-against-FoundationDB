@@ -24,7 +24,7 @@ MultiClient::~MultiClient()
 	close(socket_fd);
 }
 
-int MultiClient::put(const std::string &key_name, const std::array<uint8_t, BYTES_PER_BLOCK> &value)
+int MultiClient::put(const std::string &key_name, const std::array<uint8_t, BYTES_PER_DATA> &value)
 {
 	uint16_t request_id = random_request_id(generator);
 	if (send_request(request_id, WRITE) != 0) {
@@ -39,7 +39,7 @@ int MultiClient::put(const std::string &key_name, const std::array<uint8_t, BYTE
 		return -1;
 	}
 
-	if (send(socket_fd, value.data(), BYTES_PER_BLOCK, 0) != BYTES_PER_BLOCK) {
+	if (send(socket_fd, value.data(), BYTES_PER_DATA, 0) != BYTES_PER_DATA) {
 		perror("multiclient: send failed");
 		close(socket_fd);
 		return -1;
@@ -54,7 +54,7 @@ int MultiClient::put(const std::string &key_name, const std::array<uint8_t, BYTE
 	return 0;
 }
 
-int MultiClient::get(const std::string &key_name, std::array<uint8_t, BYTES_PER_BLOCK> &value)
+int MultiClient::get(const std::string &key_name, std::array<uint8_t, BYTES_PER_DATA> &value)
 {
 	uint16_t request_id = random_request_id(generator);
 	if (send_request(request_id, READ) != 0) {
@@ -69,7 +69,7 @@ int MultiClient::get(const std::string &key_name, std::array<uint8_t, BYTES_PER_
 		return -1;
 	}
 
-	if (recv(socket_fd, value.data(), BYTES_PER_BLOCK, 0) != BYTES_PER_BLOCK) {
+	if (recv(socket_fd, value.data(), BYTES_PER_DATA, 0) != BYTES_PER_DATA) {
 		perror("multiclient: send failed");
 		close(socket_fd);
 		return -1;
@@ -108,7 +108,7 @@ int MultiClient::clear(const std::string &key_name)
 	return 0;
 }
 
-int MultiClient::read_range(const std::string &begin_key_name, const std::string &end_key_name, std::vector<std::array<uint8_t, BYTES_PER_BLOCK>> &data)
+int MultiClient::read_range(const std::string &begin_key_name, const std::string &end_key_name, std::vector<std::array<uint8_t, BYTES_PER_DATA>> &data)
 {
 	uint16_t request_id = random_request_id(generator);
 	if (send_request(request_id, READ_RANGE) != 0) {
@@ -131,7 +131,7 @@ int MultiClient::read_range(const std::string &begin_key_name, const std::string
 	}
 	data.resize(num_data);
 	for (uint32_t current_data_idx = 0; current_data_idx < num_data; ++current_data_idx) {
-		if (recv(socket_fd, data[current_data_idx].data(), BYTES_PER_BLOCK, 0) != BYTES_PER_BLOCK) {
+		if (recv(socket_fd, data[current_data_idx].data(), BYTES_PER_DATA, 0) != BYTES_PER_DATA) {
 			perror("multiclient: recv failed");
 			close(socket_fd);
 			return -1;

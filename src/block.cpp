@@ -15,11 +15,11 @@ Block::Block(const Block &block)
 Block::Block(uint16_t block_id, const uint8_t *data, uint32_t data_size)
 {
 	bytes.data_dec.block_id = block_id;
-	if (data_size < BYTES_PER_BLOCK) {
+	if (data_size < BYTES_PER_DATA) {
 		memcpy(bytes.data_dec.data, data, data_size);
-		memset(bytes.data_dec.data + data_size, 0, BYTES_PER_BLOCK - data_size);
+		memset(bytes.data_dec.data + data_size, 0, BYTES_PER_DATA - data_size);
 	} else {
-		memcpy(bytes.data_dec.data, data, BYTES_PER_BLOCK);
+		memcpy(bytes.data_dec.data, data, BYTES_PER_DATA);
 	}
 	is_encrypted = false;
 }
@@ -35,21 +35,21 @@ void Block::swap(Block &block)
 
 void Block::set_decrypted_data(const uint8_t *data, uint32_t data_size)
 {
-	if (data_size < BYTES_PER_BLOCK) {
+	if (data_size < BYTES_PER_DATA) {
 		memcpy(bytes.data_dec.data, data, data_size);
-		memset(bytes.data_dec.data + data_size, 0, BYTES_PER_BLOCK - data_size);
+		memset(bytes.data_dec.data + data_size, 0, BYTES_PER_DATA - data_size);
 	} else {
-		memcpy(bytes.data_dec.data, data, BYTES_PER_BLOCK);
+		memcpy(bytes.data_dec.data, data, BYTES_PER_DATA);
 	}
 }
 
 void Block::set_encrypted_data(const uint8_t *data, uint32_t data_size)
 {
-	if (data_size < BYTES_PER_BLOCK + BLOCK_ID_SIZE) {
+	if (data_size < BLOCK_SIZE) {
 		memcpy(bytes.data_enc.data, data, data_size);
-		memset(bytes.data_enc.data + data_size, 0, BYTES_PER_BLOCK + BLOCK_ID_SIZE - data_size);
+		memset(bytes.data_enc.data + data_size, 0, BLOCK_SIZE - data_size);
 	} else {
-		memcpy(bytes.data_enc.data, data, BYTES_PER_BLOCK + BLOCK_ID_SIZE);
+		memcpy(bytes.data_enc.data, data, BLOCK_SIZE);
 	}
 }
 
@@ -58,7 +58,7 @@ void Block::set_decrypted_random_data()
 	std::random_device generator;
 	std::uniform_int_distribution<uint8_t> random_byte(0x00, 0xFF);
 
-	for (uint32_t i = 0; i < BYTES_PER_BLOCK; ++i) {
+	for (uint32_t i = 0; i < BYTES_PER_DATA; ++i) {
 		bytes.data_dec.data[i] = random_byte(generator);
 	}
 }
@@ -74,11 +74,14 @@ int Block::encrypt(const uint8_t *key, const uint8_t *iv)
 		return -1;
 
 	// initialize encryption operation + cipher type
-	if (1 != EVP_EncryptInit_ex(ctx, EVP_aes_256_ctr(), NULL, key, iv))
+	if (1 != EVP_EncryptInit_ex(ctx, EVP_aes_256_cbc(), NULL, key, iv))
 		return -1;
+
+	// don't padd the blocks
+	EVP_CIPHER_CTX_set_padding(ctx, 0);
  
  	// does encryption
- 	uint8_t out_buffer[BLOCK_ID_SIZE + BYTES_PER_BLOCK];
+ 	uint8_t out_buffer[BLOCK_SIZE];
 	if (1 != EVP_EncryptUpdate(ctx, out_buffer, &len, bytes.data_enc.data, sizeof(union bytes)))
 		return -1;
 
@@ -91,7 +94,8 @@ int Block::encrypt(const uint8_t *key, const uint8_t *iv)
 	ciphertext_len += len;
 	EVP_CIPHER_CTX_free(ctx);
 	is_encrypted = true;
-	memcpy(bytes.data_enc.data, out_buffer, sizeof(union bytes));
+	memset(bytes.data_enc.data, 0, BLOCK_SIZE);
+	memcpy(bytes.data_enc.data, out_buffer, sizeof(out_buffer));
 
 	return ciphertext_len;
 }
@@ -107,11 +111,14 @@ int Block::decrypt(const uint8_t *key, const uint8_t *iv)
 		return -1;
 
 	// initialize decryption operation + cipher type
-	if (1 != EVP_DecryptInit_ex(ctx, EVP_aes_256_ctr(), NULL, key, iv))
+	if (1 != EVP_DecryptInit_ex(ctx, EVP_aes_256_cbc(), NULL, key, iv))
 		return -1;
 
+	// don't padd the blocks
+	EVP_CIPHER_CTX_set_padding(ctx, 0);
+ 
 	// does decryption
- 	uint8_t out_buffer[BLOCK_ID_SIZE + BYTES_PER_BLOCK];
+ 	uint8_t out_buffer[BLOCK_SIZE];
 	if (1 != EVP_DecryptUpdate(ctx, out_buffer, &len, bytes.data_enc.data, sizeof(union bytes)))
 		return -1;
 
@@ -124,7 +131,8 @@ int Block::decrypt(const uint8_t *key, const uint8_t *iv)
 	plaintext_len += len;
 	EVP_CIPHER_CTX_free(ctx);
 	is_encrypted = false;
-	memcpy(bytes.data_enc.data, out_buffer, sizeof(union bytes));
+	memset(bytes.data_enc.data, 0, BLOCK_SIZE);
+	memcpy(bytes.data_enc.data, out_buffer, sizeof(out_buffer));
 
 	return plaintext_len;
 }
