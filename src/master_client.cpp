@@ -13,6 +13,7 @@ int master_socket = -1;
 int main()
 {
 	SingleClient client;
+	client.initialize();
 
 	struct sockaddr_in master_addr, client_addr;
 	socklen_t client_addr_len = sizeof(client_addr);
