@@ -14,19 +14,23 @@ SingleClient::SingleClient() {}
 
 int SingleClient::initialize(const std::string &server_ip, const int port, int (*custom_init)())
 {
-/*
 	if (access(".oram_enc", F_OK) != 0) {
-		ERROR("single_client: access: .oram_enc");
-		return -1
+		ERROR("access");
+		return -1;
 	}
-*/
-	// TODO: read .oram_enc file and put values into enc_key and enc_iv
-	enc_key = (uint8_t *) "0123456789abcdeF0123456789abcdeF";
-	enc_iv = (uint8_t *) "1234567890abcdef";
+	int encryption_fd;
+	if ( (encryption_fd = open(".oram_enc", O_RDONLY)) == -1 ) {
+		ERROR("open");
+		return -1;
+	}
+	if (read(encryption_fd, enc_key, 32) != 32 || lseek(encryption_fd, 1, SEEK_CUR) != 33 || read(encryption_fd, enc_iv, 16) != 16) {
+		ERROR("read encryption keys");
+		return -1;
+	}
 
 	if (access(".oram_state", F_OK) == 0) {
 		int state_fd;
-		if ( (state_fd = open(".oram_state", O_RDONLY | O_CREAT, 0666)) == -1) {
+		if ( (state_fd = open(".oram_state", O_RDONLY | O_CREAT, 0666)) == -1 ) {
 			ERROR("open");
 			return -1;
 		}

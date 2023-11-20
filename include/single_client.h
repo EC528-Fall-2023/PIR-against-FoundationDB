@@ -50,8 +50,8 @@ private:
 	std::unordered_map<uint16_t, uint16_t> position_map;
 	std::vector<Block> branch;
 	std::unordered_map<uint16_t, std::array<uint8_t, BYTES_PER_DATA>> stash;
-	uint8_t *enc_key;
-	uint8_t *enc_iv;
+	uint8_t enc_key[32];
+	uint8_t enc_iv[16];
 };
 
 #endif /* PORAM_SINGLE_CLIENT_H */
