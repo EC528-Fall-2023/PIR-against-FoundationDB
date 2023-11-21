@@ -193,8 +193,9 @@ Within the attack architecture we will store the queries from the requests to Fo
 - Add AES-256 encryption standard using OpenSSL Library
 - Created parts of the Inference Attack, such as key word matrix
 - Made data leak test; from trying to find sensitive information over the network or within the server to highlight the security of our system
-6. Security Analysis & Stretch Goals
+6. Security Analysis & Stretch Goals [12/6/23]
 - Analyze the results of the attack simulation to identify vulnerabilities and potential security improvements.
+- Resizeable ORAM
 - Try to run this on the being able to run PIR against FoundationDB on Massachuttes Open Cloud (MOC)
 
 ## 8. Videos & Slides
@@ -210,6 +211,10 @@ In the third sprint, we are able to successfully use an open-source PathORAM alg
 ### [Sprint 4](https://youtu.be/k0n5dColuRE)
 #### [Slides for sprint 4](https://docs.google.com/presentation/d/1pp84PhRwiSyWghHc9lZhWW2VgnhMV6PaDHIAit9rQl0/edit?usp=sharing)
 In the fourth sprint we implemented client library functions, started a base of encryption, mapped out an attack, added error handling and state saving, have a proof of concept for multiple clients, and a base for benchmarking
+### [Sprint 5]
+#### [Slides for sprint 5](https://docs.google.com/presentation/d/1pp84PhRwiSyWghHc9lZhWW2VgnhMV6PaDHIAit9rQl0/edit?usp=sharing)
+In the fifth sprint, we accomplish multiple benchmarking tests including: Performance based on data sizes, Performance based on block sizes, and Performance differences between Java vs C++. Also, we incorporated the AES-256 encryption standard through the utilization of the OpenSSL library. We also created security tests for our system, such as parts of the inference attack such as the keyword matrix, and types of data leaks. 
+
 ## 9. References
 - Stefanov, Emil & van Dijk, Marten & Shi, Elaine & Fletcher, Christopher & Ren, Ling & Yu, Xiangyao & Devadas, Sahana. (2012). Path ORAM: an extremely simple oblivious RAM protocol. Proceedings of the ACM Conference on Computer and Communications Security. 10.1145/2508859.2516660.
 - Mohammad Saiful Islam, Mehmet Kuzu, Murat Kantarcioglu Jonsson School of Engineering and Computer Science The University of Texas at Dallas. Access Pattern disclosure on Searchable Encryption: Ramification, Attack and Mitigation
