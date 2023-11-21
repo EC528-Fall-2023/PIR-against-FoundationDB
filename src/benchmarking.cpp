@@ -53,9 +53,9 @@ int main() {
     client.initialize();
 
     std::vector<std::pair<std::string, std::string>> inputData = {
-        {"small_data", "Dan is our mentor."},
-        {"medium_data", "This is a moderate-sized text used for benchmarking purposes for private information retrieval project."},
-        {"large_data", "In a world full of possibilities, each moment presents an opportunity for growth and discovery. Embracing challenges, individuals cultivate resilience and adaptability. Innovation thrives in environments that encourage experimentation and learning. Progress emerges from perseverance and collaboration. Together, we navigate complexities, shaping a future that reflects our aspirations and values."}
+        {"small_data", "Hey"},
+        {"medium_data", "In a world full of possibilities, each moment presents an opportunity for growth and discovery. Embracing challenges, individuals cultivate resilience and adaptability. Innovation thrives in environments that encourage experimentation and learning. Progress emerges from perseverance and collaboration. Together, we navigate complexities, shaping a future that reflects our aspirations and values."},
+	{"large_data", "Very large sample data - In a world full of possibilities, each moment presents an opportunity for growth and discovery. Embracing challenges, individuals cultivate resilience and adaptability. Innovation thrives in environments that encourage experimentation and learning. Progress emerges from perseverance and collaboration. Together, we navigate complexities, shaping a future that reflects our aspirations and values. In a world full of possibilities, each moment presents an opportunity for growth and discovery. Embracing challenges, individuals cultivate resilience and adaptability. Innovation thrives in environments that encourage experimentation and learning. Together, we navigate complexities, shaping a future that reflects our aspirations and values. In a world full of possibilities, each moment presents an opportunity for growth and discovery. Embracing challenges, individuals cultivate resilience and adaptability. Innovation thrives in environments that encourage experimentation and learning."}
     };
 
     // Perform PUT operations for varying data sizes with unique keys
