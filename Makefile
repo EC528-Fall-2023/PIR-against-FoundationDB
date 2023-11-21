@@ -20,7 +20,7 @@ all: single_client multiclient
 
 single_client: server app_single_client
 
-multiclient: server app_multiclient master_client
+multiclient: server app_multiclient master_client benchmarking
 
 server: $(OBJ_DIR)/server.o $(OBJ_DIR)/block.o
 	$(CC) $^ /lib64/libfdb_c.so $(LDLIBS) -o $@
@@ -29,6 +29,9 @@ app_single_client: $(OBJ_DIR)/app_single_client.o $(OBJ_DIR)/single_client.o $(O
 	$(CC) $^ $(LDLIBS) -o $@
 
 app_multiclient: $(OBJ_DIR)/app_multiclient.o $(OBJ_DIR)/multiclient.o $(OBJ_DIR)/block.o
+	$(CC) $^ $(LDLIBS) -o $@
+	
+benchmarking: $(OBJ_DIR)/benchmarking.o $(OBJ_DIR)/multiclient.o $(OBJ_DIR)/block.o
 	$(CC) $^ $(LDLIBS) -o $@
 
 master_client: $(OBJ_DIR)/master_client.o $(OBJ_DIR)/single_client.o $(OBJ_DIR)/block.o
@@ -54,4 +57,4 @@ $(OBJ_DIR):
 clean:
 	ps aux | grep server
 	ps aux | grep master_client
-	rm $(OBJ_DIR)/*.o server app_single_client app_multiclient master_client
+	rm $(OBJ_DIR)/*.o server app_single_client app_multiclient master_client benchmarking
