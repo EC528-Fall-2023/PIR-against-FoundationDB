@@ -187,11 +187,12 @@ Within the attack architecture we will store the queries from the requests to Fo
 - Mapped out how the inference attack will be orchestrated
 - Architected the possibility of multi client PIR system
 - Introduction to stateless client and storing the state locally on a Master client
-5. Sophisticated Attack Simulation [11/22/23]
-- Develop and execute an attack on the database to assess the system's resistance to access pattern analysis.
-- Finalize the PathORAM and FDB system by an array of error handling
-- Include an array of BenchMarks for the PIR system
-- Add encryption using OpenSSL Library
+5. Benchmarking and Encryption [11/22/23]
+- Finalize the PathORAM and FDB system by an array of error-handling
+- Include an array of BenchMarks for the PIR system such as: Java vs C++, Performance based on data sizes, and Performance based on Block Sizes 
+- Add AES-256 encryption standard using OpenSSL Library
+- Created parts of the Inference Attack, such as key word matrix
+- Made data leak test; from trying to find sensitive information over the network or within the server to highlight the security of our system
 6. Security Analysis & Stretch Goals
 - Analyze the results of the attack simulation to identify vulnerabilities and potential security improvements.
 - Try to run this on the being able to run PIR against FoundationDB on Massachuttes Open Cloud (MOC)
