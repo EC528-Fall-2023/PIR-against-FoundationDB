@@ -188,7 +188,7 @@ Within the attack architecture we will store the queries from the requests to Fo
 - Architected the possibility of multi client PIR system
 - Introduction to stateless client and storing the state locally on a Master client
 5. Benchmarking and Encryption [11/22/23]
-- Finalize the PathORAM and FDB system by an array of error-handling
+- Finalize the PathORAM system and integrate multiclient 
 - Include an array of BenchMarks for the PIR system such as: Java vs C++, Performance based on data sizes, and Performance based on Block Sizes 
 - Add AES-256 encryption standard using OpenSSL Library
 - Created parts of the Inference Attack, such as key word matrix
@@ -196,6 +196,7 @@ Within the attack architecture we will store the queries from the requests to Fo
 6. Security Analysis & Stretch Goals [12/6/23]
 - Analyze the results of the attack simulation to identify vulnerabilities and potential security improvements.
 - Resizeable ORAM
+- Error Handling 
 - Try to run this on the being able to run PIR against FoundationDB on Massachuttes Open Cloud (MOC)
 
 ## 8. Videos & Slides
@@ -211,9 +212,9 @@ In the third sprint, we are able to successfully use an open-source PathORAM alg
 ### [Sprint 4](https://youtu.be/k0n5dColuRE)
 #### [Slides for sprint 4](https://docs.google.com/presentation/d/1pp84PhRwiSyWghHc9lZhWW2VgnhMV6PaDHIAit9rQl0/edit?usp=sharing)
 In the fourth sprint we implemented client library functions, started a base of encryption, mapped out an attack, added error handling and state saving, have a proof of concept for multiple clients, and a base for benchmarking
-### [Sprint 5]
+### [Sprint 5](https://youtu.be/9e5QJJdv7Sg)
 #### [Slides for sprint 5](https://docs.google.com/presentation/d/1pp84PhRwiSyWghHc9lZhWW2VgnhMV6PaDHIAit9rQl0/edit?usp=sharing)
-In the fifth sprint, we accomplished working multi client architecture in C++. We performed multiple benchmarking tests including: Performance based on data sizes, Performance based on block sizes, and Performance differences between Java vs C++. Also, we incorporated the AES-256 encryption standard through the utilization of the OpenSSL library. We also created security tests for our system, such as parts of the inference attack such as the keyword matrix, and types of data leaks. 
+In the fifth sprint, we accomplished working multi-client architecture in C++. We performed multiple benchmarking tests including: Performance based on data sizes, Performance based on block sizes, and Performance differences between Java vs C++. Also, we incorporated the AES-256 encryption standard through the utilization of the OpenSSL library. We also created security tests for our system, such as parts of the inference attack such as the keyword matrix, and types of data leaks. 
 
 ## 9. References
 - Stefanov, Emil & van Dijk, Marten & Shi, Elaine & Fletcher, Christopher & Ren, Ling & Yu, Xiangyao & Devadas, Sahana. (2012). Path ORAM: an extremely simple oblivious RAM protocol. Proceedings of the ACM Conference on Computer and Communications Security. 10.1145/2508859.2516660.
