@@ -12,8 +12,6 @@
 - Orran Krieger
 - Ata Turk
 
-### Orginal Paper 
-Here is the original paper of the pathORAM: [Orginal Paper](https://people.csail.mit.edu/devadas/pubs/PathORam.pdf)
 ## 1. Vision and Goals Of The Project
 Our vision is to see the Path ORAM algorithm fully implemented in a client library and a server process between the user application and the FoundationDB server. The entire system should be implemented such that the client exposes a simplified interface of the FoundationDB API to the user, while adversaries cannot infer much information in a compromised database. Along the way, we will create attacks against a database to understand why sole data encryption is not enough to protect information leaking out to adversaries, and why PIR is needed for increased security.
 
@@ -193,11 +191,10 @@ Within the attack architecture we will store the queries from the requests to Fo
 - Add AES-256 encryption standard using OpenSSL Library
 - Created parts of the Inference Attack, such as key word matrix
 - Made data leak test; from trying to find sensitive information over the network or within the server to highlight the security of our system
-6. Security Analysis & Stretch Goals [12/6/23]
+6. Performance Benchmarking & Attack Simulation [12/6/23]
 - Analyze the results of the attack simulation to identify vulnerabilities and potential security improvements.
-- Resizeable ORAM
 - Error Handling 
-- Try to run this on the being able to run PIR against FoundationDB on Massachuttes Open Cloud (MOC)
+- We refine our performance test to meet a more conclusive result and ensure the comparison of similar environments/systems
 
 ## 8. Videos & Slides
 ### [Sprint 1](https://drive.google.com/file/d/1mzK61GUkCX3TyAa_z3-Qk02gBIUXeQ1o/view?usp=sharing)
@@ -217,5 +214,5 @@ In the fourth sprint we implemented client library functions, started a base of 
 In the fifth sprint, we accomplished working multi-client architecture in C++. We performed multiple benchmarking tests including: Performance based on data sizes, Performance based on block sizes, and Performance differences between Java vs C++. Also, we incorporated the AES-256 encryption standard through the utilization of the OpenSSL library. We also created security tests for our system, such as parts of the inference attack such as the keyword matrix, and types of data leaks. 
 
 ## 9. References
-- Stefanov, Emil & van Dijk, Marten & Shi, Elaine & Fletcher, Christopher & Ren, Ling & Yu, Xiangyao & Devadas, Sahana. (2012). Path ORAM: an extremely simple oblivious RAM protocol. Proceedings of the ACM Conference on Computer and Communications Security. 10.1145/2508859.2516660.
+- Stefanov, Emil & van Dijk, Marten & Shi, Elaine & Fletcher, Christopher & Ren, Ling & Yu, Xiangyao & Devadas, Sahana. (2012). Path ORAM: an extremely simple oblivious RAM protocol. Proceedings of the ACM Conference on Computer and Communications Security. 10.1145/2508859.2516660. [Orginal Paper](https://people.csail.mit.edu/devadas/pubs/PathORam.pdf)
 - Mohammad Saiful Islam, Mehmet Kuzu, Murat Kantarcioglu Jonsson School of Engineering and Computer Science The University of Texas at Dallas. Access Pattern disclosure on Searchable Encryption: Ramification, Attack and Mitigation
