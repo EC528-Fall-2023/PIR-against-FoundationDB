@@ -7,43 +7,56 @@ ifeq ($(DEBUG), 1)
 	CFLAGS += -g3 -DDEBUG
 endif
 
+ifeq ($(SEED), 1)
+	CFLAGS += -DSEEDED_RANDOM
+endif
+
 SRC_DIR := src
 OBJ_DIR := obj
 INC_DIR := include
+BMK_DIR := benchmarking
+BIN_DIR := bin
 SRC := $(wildcard $(SRC_DIR)/*.cpp)
 OBJ := $(patsubst $(SRC_DIR)/%.cpp,$(OBJ_DIR)/%.o,$(SRC))
 INC := $(wildcard $(INC_DIR)/*.h)
 
-.PHONY: all server single_client multiclient init clean
+.PHONY: all server single_client multiclient bm clean
 
-all: single_client multiclient
+all: single_client multiclient bm
 
 single_client: server app_single_client
 
-multiclient: server app_multiclient master_client benchmarking
+multiclient: server app_multiclient master_client
 
-server: $(OBJ_DIR)/server.o $(OBJ_DIR)/block.o
-	$(CC) $^ /lib64/libfdb_c.so $(LDLIBS) -o $@
+bm: init
+
+server: $(OBJ_DIR)/server.o $(OBJ_DIR)/block.o | $(BIN_DIR)
+	$(CC) $^ /lib64/libfdb_c.so $(LDLIBS) -o $(BIN_DIR)/$@
 	
-app_single_client: $(OBJ_DIR)/app_single_client.o $(OBJ_DIR)/single_client.o $(OBJ_DIR)/block.o
-	$(CC) $^ $(LDLIBS) -o $@
+app_single_client: $(OBJ_DIR)/app_single_client.o $(OBJ_DIR)/single_client.o $(OBJ_DIR)/block.o | $(BIN_DIR)
+	$(CC) $^ $(LDLIBS) -o $(BIN_DIR)/$@
 
-app_multiclient: $(OBJ_DIR)/app_multiclient.o $(OBJ_DIR)/multiclient.o $(OBJ_DIR)/block.o
-	$(CC) $^ $(LDLIBS) -o $@
+app_multiclient: $(OBJ_DIR)/app_multiclient.o $(OBJ_DIR)/multiclient.o $(OBJ_DIR)/block.o | $(BIN_DIR)
+	$(CC) $^ $(LDLIBS) -o $(BIN_DIR)/$@
 	
-benchmarking: $(OBJ_DIR)/benchmarking.o $(OBJ_DIR)/multiclient.o $(OBJ_DIR)/block.o
-	$(CC) $^ $(LDLIBS) -o $@
+master_client: $(OBJ_DIR)/master_client.o $(OBJ_DIR)/single_client.o $(OBJ_DIR)/block.o | $(BIN_DIR)
+	$(CC) $^ $(LDLIBS) -o $(BIN_DIR)/$@
 
-master_client: $(OBJ_DIR)/master_client.o $(OBJ_DIR)/single_client.o $(OBJ_DIR)/block.o
-	$(CC) $^ $(LDLIBS) -o $@
+init: test_fdb server clear_fdb | $(BIN_DIR)
+	echo -e 'WORKDIR=$$(dirname "$$0")' > $(BIN_DIR)/$@.sh
+	echo -e 'rm $$WORKDIR/.oram_state' >> $(BIN_DIR)/$@.sh
+	echo -e '$$WORKDIR/clear_fdb' >> $(BIN_DIR)/$@.sh
+	echo -e '$$WORKDIR/server &' >> $(BIN_DIR)/$@.sh
+	echo -e 'PID=$$\x21' >> $(BIN_DIR)/$@.sh
+	echo -e '$$WORKDIR/test_fdb' >> $(BIN_DIR)/$@.sh
+	echo -e 'kill $$PID' >> $(BIN_DIR)/$@.sh
+	chmod +x $(BIN_DIR)/$@.sh
 
-init: init_values init_random
+test_fdb: $(OBJ_DIR)/test_fdb.o $(OBJ_DIR)/single_client.o $(OBJ_DIR)/block.o | $(BIN_DIR)
+	$(CC) $^ /lib64/libfdb_c.so $(LDLIBS) -o $(BIN_DIR)/$@
 
-init_values: testing/init_values.cpp $(OBJ_DIR)/block.o
-	$(CC) $(CPPFLAGS) $^ /lib64/libfdb_c.so $(LDLIBS) -o $@
-
-init_random: testing/init_random.cpp $(OBJ_DIR)/block.o
-	$(CC) $(CPPFLAGS) $^ /lib64/libfdb_c.so $(LDLIBS) -o $@
+clear_fdb: $(OBJ_DIR)/clear_fdb.o | $(BIN_DIR)
+	$(CC) $^ /lib64/libfdb_c.so $(LDLIBS) -o $(BIN_DIR)/$@
 
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp $(INC_DIR)/%.h | $(OBJ_DIR)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
@@ -51,10 +64,14 @@ $(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp $(INC_DIR)/%.h | $(OBJ_DIR)
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp | $(OBJ_DIR)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
-$(OBJ_DIR):
+$(OBJ_DIR)/%.o: $(BMK_DIR)/%.cpp | $(OBJ_DIR)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+
+$(OBJ_DIR) $(BIN_DIR):
 	mkdir $@
 
-clean:
+clean: clear_fdb
 	ps aux | grep server
 	ps aux | grep master_client
-	rm $(OBJ_DIR)/*.o server app_single_client app_multiclient master_client benchmarking
+	$(BIN_DIR)/clear_fdb
+	rm $(OBJ_DIR)/*.o $(BIN_DIR)/*

@@ -7,8 +7,13 @@
 	#define ERROR(function)
 #endif
 
-static std::random_device generator;
 static std::uniform_int_distribution<int> oram_random(1, 32768); // [1, 2^15]
+#ifdef SEEDED_RANDOM
+std::mt19937 generator(42);
+#else
+static std::random_device generator;
+#endif
+#define RAND() oram_random(generator)
 
 SingleClient::SingleClient() {}
 
@@ -105,7 +110,7 @@ int SingleClient::initialize(const std::string &server_ip, const int port, int (
 		for (int i = 0; i < BLOCKS_PER_BUCKET * BUCKETS_PER_TREE - 1; ++i) {
 			memset(random_data, 0, BYTES_PER_DATA);
 			for (int j = 0; j < BYTES_PER_DATA; ++j) {
-				random_data[j] = oram_random(generator);
+				random_data[j] = RAND();
 			}
 			Block block(0, random_data, BYTES_PER_DATA);
 			if (block.encrypt(enc_key, enc_iv) == -1) {
@@ -119,7 +124,7 @@ int SingleClient::initialize(const std::string &server_ip, const int port, int (
 		}
 		memset(random_data, 0, BYTES_PER_DATA);
 		for (int j = 0; j < BYTES_PER_DATA; ++j) {
-			random_data[j] = oram_random(generator);
+			random_data[j] = RAND();
 		}
 		Block block(0, random_data, BYTES_PER_DATA);
 		if (block.encrypt(enc_key, enc_iv) == -1) {
@@ -158,12 +163,12 @@ int SingleClient::put(const std::string &key_name, const std::array<uint8_t, BYT
 				break;
 		}
 		key_to_block_id[key_name] = i;
-		position_map[i] = oram_random(generator);
+		position_map[i] = RAND();
 	}
 
 	uint16_t requested_block_id = key_to_block_id[key_name];
 	
-	uint16_t request_id = oram_random(generator);
+	uint16_t request_id = RAND();
 	if (send(socket_fd, &request_id, sizeof(request_id), 0) != sizeof(request_id)) {
 		ERROR("send");
 		close(socket_fd);
@@ -182,6 +187,16 @@ int SingleClient::put(const std::string &key_name, const std::array<uint8_t, BYT
 	// perform swaps
 	std::array<uint8_t, BYTES_PER_DATA> value_buffer = value;
 	traverse_branch(requested_block_id, WRITE, &value_buffer);
+#ifdef DEBUG
+	std::cout << "single_client: updated leaf_ids =";
+	for (uint32_t i = 0; i < branch.size(); ++i) {
+		if (i % BLOCKS_PER_BUCKET == 0)
+			std::cout << " |";
+		std::cout << ' ' << branch[i].get_block_id();
+	}
+	std::cout << '\n';
+	std::cout << "single_client: recv " << branch.size() << " blocks\n";
+#endif
 
 	// send branch back
 	if (send_branch() == -1) {
@@ -217,7 +232,7 @@ int SingleClient::get(const std::string &key_name, std::array<uint8_t, BYTES_PER
 
 	uint16_t requested_block_id = key_to_block_id[key_name];
 
-	uint16_t request_id = oram_random(generator);
+	uint16_t request_id = RAND();
 	if (send(socket_fd, &request_id, sizeof(request_id), 0) != sizeof(request_id)) {
 		ERROR("send");
 		close(socket_fd);
@@ -236,6 +251,16 @@ int SingleClient::get(const std::string &key_name, std::array<uint8_t, BYTES_PER
 	// perform swaps
 	std::array<uint8_t, BYTES_PER_DATA> value_buffer = {0};
 	traverse_branch(requested_block_id, READ, &value_buffer);
+#ifdef DEBUG
+	std::cout << "single_client: updated leaf_ids =";
+	for (uint32_t i = 0; i < branch.size(); ++i) {
+		if (i % BLOCKS_PER_BUCKET == 0)
+			std::cout << " |";
+		std::cout << ' ' << branch[i].get_block_id();
+	}
+	std::cout << '\n';
+	std::cout << "single_client: recv " << branch.size() << " blocks\n";
+#endif
 
 	// send branch back
 	if (send_branch() == -1) {
@@ -269,7 +294,7 @@ int SingleClient::clear(const std::string &key_name)
 
 	uint16_t requested_block_id = key_to_block_id[key_name];
 	
-	uint16_t request_id = oram_random(generator);
+	uint16_t request_id = RAND();
 	if (send(socket_fd, &request_id, sizeof(request_id), 0) != sizeof(request_id)) {
 		ERROR("send");
 		close(socket_fd);
@@ -287,6 +312,16 @@ int SingleClient::clear(const std::string &key_name)
 
 	// perform swaps
 	traverse_branch(requested_block_id, CLEAR, nullptr);
+#ifdef DEBUG
+	std::cout << "single_client: updated leaf_ids =";
+	for (uint32_t i = 0; i < branch.size(); ++i) {
+		if (i % BLOCKS_PER_BUCKET == 0)
+			std::cout << " |";
+		std::cout << ' ' << branch[i].get_block_id();
+	}
+	std::cout << '\n';
+	std::cout << "single_client: recv " << branch.size() << " blocks\n";
+#endif
 
 	// send branch back
 	if (send_branch() == -1) {
@@ -396,7 +431,7 @@ void SingleClient::traverse_branch(uint16_t requested_block_id, enum Operation o
 			else if (op == CLEAR)
 				current_block.set_block_id(0);
 
-			uint16_t rand_leaf_id = oram_random(generator);
+			uint16_t rand_leaf_id = RAND();
 			uint16_t idx = find_intersection_bucket(position_map[requested_block_id], rand_leaf_id);
 			position_map[requested_block_id] = rand_leaf_id;
 #ifdef DEBUG
@@ -413,7 +448,7 @@ void SingleClient::traverse_branch(uint16_t requested_block_id, enum Operation o
 
 			memcpy(stash[current_block.get_block_id()].data(), current_block.get_decrypted_data(), BYTES_PER_DATA);
 #ifdef DEBUG
-			std::cout << "wrote block " << current_block.get_block_id() << " to stash\n";
+			std::cout << "single_client: wrote block " << current_block.get_block_id() << " to stash\n";
 #endif
 			current_block.set_block_id(0);
 			current_block.set_decrypted_random_data();
@@ -423,6 +458,9 @@ void SingleClient::traverse_branch(uint16_t requested_block_id, enum Operation o
 		long j;
 		for (j = idx * BLOCKS_PER_BUCKET; j < (idx + 1) * BLOCKS_PER_BUCKET; ++j) {
 			if (branch[j].get_block_id() == 0) {
+#ifdef DEBUG
+				std::cout << "single_client: swap block " << current_block.get_block_id() << " to branch idx " << j << '\n';
+#endif
 				current_block.swap(branch[j]);
 				break;
 			}
@@ -433,7 +471,7 @@ void SingleClient::traverse_branch(uint16_t requested_block_id, enum Operation o
 
 			memcpy(stash[current_block.get_block_id()].data(), current_block.get_decrypted_data(), BYTES_PER_DATA);
 #ifdef DEBUG
-			std::cout << "wrote block " << current_block.get_block_id() << " to stash\n";
+			std::cout << "single_client: wrote block " << current_block.get_block_id() << " to stash (not requested block)\n";
 #endif
 			current_block.set_block_id(0);
 			current_block.set_decrypted_random_data();
@@ -441,6 +479,7 @@ void SingleClient::traverse_branch(uint16_t requested_block_id, enum Operation o
 	}
 
 	// look for requested block in the stash
+	std::vector<uint16_t> keys_to_remove;
 	for (auto current_block = stash.begin(); current_block != stash.end(); ) {
 		RESTART:
 		if (current_block->first == requested_block_id) {
@@ -450,9 +489,12 @@ void SingleClient::traverse_branch(uint16_t requested_block_id, enum Operation o
 				memcpy(current_block->second.data(), value_buffer->data(), BYTES_PER_DATA);
 			else if (op == CLEAR) {
 				stash.erase(current_block);
+				for (uint16_t key : keys_to_remove) {
+					stash.erase(key);
+				}
 				return;
 			}
-			uint16_t rand_leaf_id = oram_random(generator);
+			uint16_t rand_leaf_id = RAND();
 			uint16_t idx = find_intersection_bucket(position_map[requested_block_id], rand_leaf_id);
 			position_map[requested_block_id] = rand_leaf_id;
 #ifdef DEBUG
@@ -461,12 +503,16 @@ void SingleClient::traverse_branch(uint16_t requested_block_id, enum Operation o
 			for (long j = (idx + 1) * BLOCKS_PER_BUCKET - 1; j >= 0; --j) {
 				if (branch[j].get_block_id() == 0) {
 #ifdef DEBUG
-					std::cout << "single_client: moved block " << current_block->first << " from stash to branch\n";
+					std::cout << "single_client: moved block " << current_block->first << " from stash to branch index " << j << '\n';
 #endif
 					branch[j] = Block(current_block->first, current_block->second.data(), BYTES_PER_DATA);
-					stash.erase(current_block);
+					keys_to_remove.push_back(current_block->first);
+					//stash.erase(current_block);
 					break;
 				}
+			}
+			for (uint16_t key : keys_to_remove) {
+				stash.erase(key);
 			}
 			return;
 		}
@@ -474,18 +520,22 @@ void SingleClient::traverse_branch(uint16_t requested_block_id, enum Operation o
 		for (long j = idx * BLOCKS_PER_BUCKET; j < (idx + 1) * BLOCKS_PER_BUCKET; ++j) {
 			if (branch[j].get_block_id() == 0) {
 #ifdef DEBUG
-				std::cout << "single_client: moved block " << current_block->first << " from stash to branch\n";
+				std::cout << "single_client: moved block " << current_block->first << " from stash to branch index " << j << '\n';
 #endif
 				branch[j] = Block(current_block->first, current_block->second.data(), BYTES_PER_DATA);
-				current_block = stash.erase(current_block);
+				keys_to_remove.push_back(current_block->first);
+				//current_block = stash.erase(current_block);
 				goto RESTART;
 			}
 		}
 		++current_block;
 	}
+	for (uint16_t key : keys_to_remove) {
+		stash.erase(key);
+	}
 
 	// if we are putting a new block
-	uint16_t rand_leaf_id = oram_random(generator);
+	uint16_t rand_leaf_id = RAND();
 	uint16_t idx = find_intersection_bucket(position_map[requested_block_id], rand_leaf_id);
 	position_map[requested_block_id] = rand_leaf_id;
 	for (long j = (idx + 1) * BLOCKS_PER_BUCKET - 1; j >= 0; --j) {
