@@ -40,10 +40,10 @@ These principal user roles, Sarah and Alex, encompass specific characteristics a
 ### Features in Scope:
 
 - Path ORAM Integration: The primary scope of the project is to implement the Path ORAM algorithm as an access method to FoundationDB. This integration will involve both client and server components that act as a front end to FoundationDB.
-- Client Library: The client library functions exposed to the user's application should look similar to FoundationDB's "put", "get", "range\_read", and "range\_clear" Java API functions. In the background, the library will have to send and receive data to and from the Path ORAM server, and shuffle it to send it back to the server.
-- Server Process: The Path ORAM server will listen for incoming requests, store all data in the tree structure, and send the data back to the FoundationDB server via the FoundationDB Java API.
+- Client Library: The client library functions exposed to the user's application should look similar to FoundationDB's "put", "get", "range\_read", and "range\_clear" C API functions. In the background, the library will have to send and receive data to and from the Path ORAM server, and shuffle it to send it back to the server.
+- Server Process: The Path ORAM server will listen for incoming requests, store all data in the tree structure, and send the data back to the FoundationDB server via the FoundationDB C API.
 - Attack Replication: Replicate a real-world attack that leverages access patterns. This involves simulating an adversarial scenario to analyze and understand the vulnerabilities that might exist within the system when it comes to privacy and access pattern analysis.
-- Overhead Analysis: Measure and analyze the overhead introduced by the use of the Path ORAM algorithm for various operations within the FoundationDB system. Explore potential strategies to mitigate this overhead.
+- Overhead and Performance Analysis: Measure and analyze the overhead introduced by the use of the Path ORAM algorithm for various operations within the FoundationDB system. Explore potential strategies to mitigate this overhead.
 - MultiClient Adoption: In the original PathORAM there is only one client that is reading or writing to a database, but with a new architectural system, multiple clients can be enabled to and retrieve the necessary information to have the most recent changes to the data
 
 ### Out-of-Scope:
@@ -86,7 +86,7 @@ These principal user roles, Sarah and Alex, encompass specific characteristics a
 12. Once completed, the PathORAM Server will send the request id back to the master client
 13. If the master client receives the request id, then it will send it back to the client and print its successful 
 
-#### In-Depth Explanation of each component within PIR:
+#### In-depth explanation of each component within PIR:
 Path ORAM Server (Server):
 - The Path ORAM Server is the component responsible for implementing one part of the Path ORAM algorithm.
 - It stores a binary tree structure full of encrypted data where each node (bucket) contains data blocks, which contains an id.
