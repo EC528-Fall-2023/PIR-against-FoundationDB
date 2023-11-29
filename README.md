@@ -154,7 +154,7 @@ To test that our PathORAM has been implemented correctly, we will be creating a 
 ### Planned Architecture of the attack
 
 ### Planned Architecture
-![Attack Architecture Diagram](Attack/AttackArchitecture.png)
+![Attack Architecture Diagram](Attack/current_attack.png)
 
 #### Explanation of the diagram above
 1. Receives an array of queries from client to server (The attack has access to all communications with the server)
