@@ -1,59 +1,81 @@
 import pandas as pd
-from nltk.tokenize import word_tokenize
 from nltk.stem import PorterStemmer
-from nltk.probability import FreqDist
 import numpy as np
 
-# Reads the dataset and removes irrelevant columns
+# Reads the dataset
 unsorted_data = pd.read_csv('spam_ham_dataset.csv')
-unsorted_data = unsorted_data.drop(columns=['col2', 'col3'])
 
-# Sorts the data by the first column
-sorted_data = unsorted_data.sort_values(by='col1')
+# Removes irrelevant columns (assuming column indexing starts from 0)
+unsorted_data = unsorted_data.drop(unsorted_data.columns[[1, 3]], axis=1)
 
-# Cleans the text data
-cleaned_strings = sorted_data['text'].str.replace('[^a-zA-Z \n\']', ' ')
-cleaned_strings = cleaned_strings.str.replace('\s+', ' ')
-cleaned_strings = cleaned_strings.str.replace('\s*\'\s*', '\'')
+# Sorts the data based on the first column (assuming column indexing starts from 0)
+sorted_data = unsorted_data.sort_values(by=unsorted_data.columns[0])
+print(sorted_data.columns)
+
+# Extracts the 'text' column from sorted_data
+strings = sorted_data['text']
+
+# Converts to string type
+strings = strings.astype(str)
+
+# Cleans the strings using regular expressions
+cleaned_strings = strings.str.replace(r'[^a-zA-Z \n\']', ' ')
 sorted_data['text'] = cleaned_strings
 
-# Splits the data into the test set and training set
+# Replaces newline characters with a space
+sorted_data['text'] = sorted_data['text'].replace('\n', ' ')
+
+# Removes extra spaces and single quotes
+cleaned_strings = sorted_data['text'].str.replace(r'\s+', ' ')
+cleaned_strings = cleaned_strings.str.replace(r'\s*\'\s*', "'")
+
+# Assigns cleaned strings back to the DataFrame
+sorted_data['text'] = cleaned_strings
+
+# Splits the data into test set and training set
 test_set = sorted_data.iloc[:200, :]
-training_set = sorted_data.iloc[200:, :].reset_index(drop=True)
-training_set['ID'] = np.arange(len(training_set))
+training_set = sorted_data.iloc[200:, :]
 
-# Creates matrix M for the probability of two given keywords appearing together
-documents = [word_tokenize(text) for text in training_set['text']]
+# Sets the 'ID' column to start at 0 for the training set
+training_set['ID'] = range(len(training_set))
 
-# Converts to an array of words
-doc_string = [word for doc in documents for word in doc]
+# Concatenate all text in the training set into a single string
+all_text = ' '.join(training_set['text'])
 
-# Finds all unique words within the training set
-unique_keywords = list(set(doc_string))
+# Split the text into words
+all_words = all_text.split()
 
-# Stems the words using Porter Stemmer
-ps = PorterStemmer()
-stem_words = [ps.stem(word) for word in unique_keywords]
-unique_stem_words = list(set(stem_words))
+# Find all unique words within the training set
+unique_keywords = list(set(all_words))
 
-# Creates a blank template for matrix M
-M = np.zeros((len(unique_stem_words), len(unique_stem_words)))
+# Apply Porter stemming algorithm to the unique words
+porter = PorterStemmer()
+stemmed_words = [porter.stem(word) for word in unique_keywords]
 
-# Iterates through each possible pair of unique keywords
-count = 0
-for i in range(len(unique_stem_words)):
-    for j in range(len(unique_stem_words)):
-        # Finds the probability each word appears in any document
-        prob_i = sum(any(word in doc for doc in documents) for word in unique_stem_words[i]) / len(documents)
-        prob_j = sum(any(word in doc for doc in documents) for word in unique_stem_words[j]) / len(documents)
+# Create a blank template for matrix M
+M = np.zeros((len(stemmed_words), len(stemmed_words)))
 
-        # Finds the probability of both words appearing
-        co_occurrence_count = sum(any(word in doc for doc in documents) for word in (unique_keywords[i], unique_keywords[j]))
-        prob_both = co_occurrence_count / len(documents)
+total_combinations = len(unique_keywords)**2
 
-        # Calculates the expected probability of both appearing in any given document
+for i in range(len(stemmed_words)):
+    for j in range(len(stemmed_words)):
+        # Find the probability each word appears in any document
+        prob_i = sum(stemmed_words in text for text in training_set['text']) / len(training_set)
+        prob_j = prob_i  # Since the expression is the same, no need to recalculate
+
+        # Find the probability of both words appearing
+        co_occurrence_count = sum(
+            word_i in text and word_j in text
+            for text in training_set['text']
+            for word_i in unique_keywords
+            for word_j in unique_keywords
+        )
+        prob_both = co_occurrence_count / len(training_set)
+
+        # Calculate the expected probability of both appearing in any given document
         M[i, j] = prob_i * prob_j * prob_both
+# Convert the matrix M to a Pandas DataFrame
+df_matrix = pd.DataFrame(M, index=stemmed_words, columns=stemmed_words)
 
-        # Checking progress
-        count += 1
-        print(f'Complete: {count}/{len(unique_keywords)**2}')
+# Save the DataFrame to a CSV file
+df_matrix.to_csv('output_matrix.csv')
