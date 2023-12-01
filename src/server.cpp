@@ -26,11 +26,11 @@
 
 inline int setup_socket(int &server_socket, struct sockaddr_in &address, pthread_t &network_thread);
 inline int setup_fdb();
-inline int get_branch_indexes(std::vector<uint16_t> &branch_indexes, uint16_t leaf_id);
-inline int get_branch_from_fdb(std::vector<Block> &branch, std::vector<uint16_t> &branch_indexes);
+inline int get_branch_indexes(std::vector<blkid_t> &branch_indexes, blkid_t leaf_id);
+inline int get_branch_from_fdb(std::vector<Block> &branch, std::vector<blkid_t> &branch_indexes);
 inline int send_branch_to_client(std::vector<Block> &branch);
 inline int receive_updated_blocks(std::vector<Block> &branch);
-inline int send_branch_to_fdb(std::vector<Block> &branch, std::vector<uint16_t> &branch_indexes);
+inline int send_branch_to_fdb(std::vector<Block> &branch, std::vector<blkid_t> &branch_indexes);
 inline void close_connection();
 
 void *run_network(void *arg)
@@ -82,7 +82,7 @@ int main()
 
 		while (1) {
 			// receive request_id
-			uint16_t request_id;
+			blkid_t request_id;
 			switch (recv(client_socket, &request_id, sizeof(request_id), 0)) {
 			case 0:
 #ifdef DEBUG
@@ -101,7 +101,7 @@ int main()
 #endif
 
 			// receive leaf_id
-			uint16_t leaf_id;
+			blkid_t leaf_id;
 			if (recv(client_socket, &leaf_id, sizeof(leaf_id), 0) != sizeof(leaf_id)) {
 				ERROR("recv");
 				close_connection();
@@ -112,7 +112,7 @@ int main()
 #endif
 
 			// contains indexes that correspond to nodes on the branch
-			std::vector<uint16_t> branch_indexes;
+			std::vector<blkid_t> branch_indexes;
 			if (get_branch_indexes(branch_indexes, leaf_id) != 0) {
 				ERROR("get_branch_indexes");
 				close_connection();
@@ -120,7 +120,7 @@ int main()
 			}
 
 			// send number of blocks to send
-			uint16_t num_blocks = branch_indexes.size() * BLOCKS_PER_BUCKET;
+			blkid_t num_blocks = branch_indexes.size() * BLOCKS_PER_BUCKET;
 			if (send(client_socket, &num_blocks, sizeof(num_blocks), 0) != sizeof(num_blocks)) {
 				ERROR("send");
 				close_connection();
@@ -298,10 +298,11 @@ inline int setup_fdb()
 			return -1;
 		}
 
-		for (uint16_t tree_index = 1; tree_index != 0; ++tree_index) {
-			uint8_t temp[3] = {0};
-			temp[1] = (tree_index & 0xff00) >> 8;
-			temp[2] = tree_index & 0x00ff;
+		for (blkid_t tree_index = 1; tree_index <= BUCKETS_PER_TREE && tree_index != 0; ++tree_index) {
+			uint8_t temp[sizeof(blkid_t)+1] = {0};
+			for (int i = sizeof(blkid_t); i != 0; --i) {
+				temp[i] = (tree_index & 0xff << 8 * (sizeof(blkid_t) - i)) >> 8 * (sizeof(blkid_t) - i);
+			}
 			uint8_t bucket[BLOCK_SIZE * BLOCKS_PER_BUCKET];
 
 			for (int block_idx = 0; block_idx < BLOCKS_PER_BUCKET; ++block_idx) {
@@ -354,6 +355,8 @@ inline int setup_fdb()
 		fdb_future_destroy(status);
 		fdb_transaction_destroy(tr);
 		status = NULL;
+
+		std::cout << "server: initialized " << BUCKETS_PER_TREE << " buckets\n";
 		
 		tr = NULL;
 		if (fdb_database_create_transaction(db, &tr) != 0) {
@@ -380,15 +383,15 @@ inline int setup_fdb()
 	return 0;
 }
 
-inline int get_branch_indexes(std::vector<uint16_t> &branch_indexes, uint16_t leaf_id)
+inline int get_branch_indexes(std::vector<blkid_t> &branch_indexes, blkid_t leaf_id)
 {
-	if (leaf_id == 0 || leaf_id > 0x00008000)
+	if (leaf_id == 0 || leaf_id > 1 << (TREE_LEVELS - 1))
 		return -1;
 	--leaf_id;
-	uint16_t tree_idx = 1;
-	for (uint8_t i = 0; i < 16; ++i) {
+	blkid_t tree_idx = 1;
+	for (uint8_t i = 0; i < TREE_LEVELS; ++i) {
 		branch_indexes.push_back(tree_idx);
-		if (leaf_id & 0x00004000)
+		if (leaf_id & 1 << (TREE_LEVELS - 2))
 			tree_idx = tree_idx * 2 + 1;
 		else
 			tree_idx = tree_idx * 2;
@@ -397,9 +400,9 @@ inline int get_branch_indexes(std::vector<uint16_t> &branch_indexes, uint16_t le
 	return 0;
 }
 
-inline int get_branch_from_fdb(std::vector<Block> &branch, std::vector<uint16_t> &branch_indexes)
+inline int get_branch_from_fdb(std::vector<Block> &branch, std::vector<blkid_t> &branch_indexes)
 {
-	for (uint16_t current_bucket = 0; current_bucket < branch.size() / BLOCKS_PER_BUCKET; ++current_bucket) {
+	for (blkid_t current_bucket = 0; current_bucket < TREE_LEVELS; ++current_bucket) {
 		// create transaction
 		if (fdb_database_create_transaction(db, &tr) != 0) {
 			ERROR("fdb_database_create_transaction");
@@ -407,10 +410,10 @@ inline int get_branch_from_fdb(std::vector<Block> &branch, std::vector<uint16_t>
 		}
 
 		// request and wait for bucket
-		uint8_t temp[3];
-		temp[0] = 0;
-		temp[1] = (branch_indexes[current_bucket] & 0xff00) >> 8;
-		temp[2] = branch_indexes[current_bucket] & 0x00ff;
+		uint8_t temp[sizeof(blkid_t)+1] = {0};
+		for (int i = sizeof(blkid_t); i != 0; --i) {
+			temp[i] = (branch_indexes[current_bucket] & 0xff << 8 * (sizeof(blkid_t) - i)) >> 8 * (sizeof(blkid_t) - i);
+		}
 		status = fdb_transaction_get(tr, temp, sizeof(temp), 0);
 		if (fdb_future_block_until_ready(status) != 0) {
 			ERROR("fdb_future_block_until_ready");
@@ -482,7 +485,7 @@ inline int receive_updated_blocks(std::vector<Block> &branch)
 	return 0;
 }
 
-inline int send_branch_to_fdb(std::vector<Block> &branch, std::vector<uint16_t> &branch_indexes)
+inline int send_branch_to_fdb(std::vector<Block> &branch, std::vector<blkid_t> &branch_indexes)
 {
 	// create transaction
 	if (fdb_database_create_transaction(db, &tr) != 0) {
@@ -490,7 +493,7 @@ inline int send_branch_to_fdb(std::vector<Block> &branch, std::vector<uint16_t> 
 		return -1;
 	}
 
-	for (uint16_t current_bucket = 0; current_bucket < branch.size() / BLOCKS_PER_BUCKET; ++current_bucket) {
+	for (blkid_t current_bucket = 0; current_bucket < TREE_LEVELS; ++current_bucket) {
 		// construct bucket
 		uint8_t bucket[BLOCK_SIZE * BLOCKS_PER_BUCKET];
 		for (uint8_t current_block = 0; current_block < BLOCKS_PER_BUCKET; ++current_block) {
@@ -498,10 +501,10 @@ inline int send_branch_to_fdb(std::vector<Block> &branch, std::vector<uint16_t> 
 		}
 
 		// send bucket to fdb
-		uint8_t temp[3];
-		temp[0] = 0;
-		temp[1] = (branch_indexes[current_bucket] & 0xff00) >> 8;
-		temp[2] = branch_indexes[current_bucket] & 0x00ff;
+		uint8_t temp[sizeof(blkid_t)+1] = {0};
+		for (int i = sizeof(blkid_t); i != 0; --i) {
+			temp[i] = (branch_indexes[current_bucket] & 0xff << 8 * (sizeof(blkid_t) - i)) >> 8 * (sizeof(blkid_t) - i);
+		}
 		fdb_transaction_set(tr, temp, sizeof(temp), bucket, sizeof(bucket));
 	}
 

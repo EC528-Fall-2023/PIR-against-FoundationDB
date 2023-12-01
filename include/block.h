@@ -9,11 +9,15 @@
 #include <openssl/evp.h>
 #include <openssl/aes.h>
 
-#define BYTES_PER_DATA 1022
-#define BLOCKS_PER_BUCKET 3
-#define BYTES_PER_BLOCKID sizeof(uint16_t)
-#define BLOCK_SIZE (BYTES_PER_BLOCKID + BYTES_PER_DATA)
-#define BUCKETS_PER_TREE 0xffff
+/* YOU CAN MODIFY */
+#define BLOCK_SIZE 1024		/* MUST BE A MULTIPLE OF 16 */
+#define BLOCKS_PER_BUCKET 1	/* MUST BE RELATIVELY SMALL */
+#define blkid_t uint16_t	/* MUST BE ONE OF uint8_t, uint16_t, uint32_t, uint64_t */
+#define TREE_LEVELS 16		/* MUST COMPLY WITH: (2^TREE_LEVELS - 1) * BLOCKS_PER_BUCKET <= 2^(sizeof(blkid_t) * 8) - 1 */
+
+/* DO NOT MODIFY */
+#define BYTES_PER_DATA (BLOCK_SIZE - sizeof(blkid_t))
+#define BUCKETS_PER_TREE (0xffffffffffffffff >> (64 - TREE_LEVELS))
 
 class Block {
 public:
