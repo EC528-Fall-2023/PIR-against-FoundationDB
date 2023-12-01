@@ -11,6 +11,8 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <sys/time.h>
+#include <fstream>
+#include <iomanip>
 
 #ifdef DEBUG
 	#include <error.h>
@@ -421,7 +423,12 @@ inline int get_branch_indexes(std::vector<blkid_t> &branch_indexes, blkid_t leaf
 
 inline int get_branch_from_fdb(std::vector<Block> &branch, std::vector<blkid_t> &branch_indexes)
 {
-	for (blkid_t current_bucket = 0; current_bucket < TREE_LEVELS; ++current_bucket) {
+#ifdef DEBUG
+    std::ofstream file("data.csv", std::ios::out | std::ios::app); // Open a file in append mode
+    file << "Key,Value\n"; // Headers for the columns
+#endif
+
+    for (blkid_t current_bucket = 0; current_bucket < TREE_LEVELS; ++current_bucket) {
 		// create transaction
 		if (fdb_database_create_transaction(db, &tr) != 0) {
 			ERROR("fdb_database_create_transaction");
@@ -452,6 +459,25 @@ inline int get_branch_from_fdb(std::vector<Block> &branch, std::vector<blkid_t> 
 				for (int current_block = 0; current_block < BLOCKS_PER_BUCKET; ++current_block) {
 					branch[current_bucket * BLOCKS_PER_BUCKET + current_block].set_encrypted_data(out_value + current_block * BLOCK_SIZE, BLOCK_SIZE);
 				}
+#ifdef DEBUG
+                // CSV writing part
+            std::ofstream file("data.csv", std::ios::out | std::ios::app); // Open a file in append mode
+
+            // Printing key as a hex string in the first column
+            for (int i = sizeof(blkid_t); i != 0; --i) {
+                file << std::hex << std::setfill('0') << std::setw(2)
+                     << ((branch_indexes[current_bucket] >> 8 * (sizeof(blkid_t) - i)) & 0xff);
+            }
+            file << ","; // Delimiter
+
+            // Write value as a hex string in the second column
+            for (int i = 0; i < out_value_length; ++i) {
+                file << std::hex << std::setfill('0') << std::setw(2) << static_cast<unsigned>(out_value[i]);
+            }
+            file << "\n"; // New line for next record
+
+            file.close(); // Close the file stream
+#endif
 			} else {
 			}
 		} else {
@@ -465,7 +491,11 @@ inline int get_branch_from_fdb(std::vector<Block> &branch, std::vector<blkid_t> 
 		status = NULL;
 		tr = NULL;
 	}
-	return 0;
+
+#ifdef DEBUG
+    file.close(); // Close the file stream
+#endif
+    return 0;
 }
 
 inline int send_branch_to_client(std::vector<Block> &branch)
@@ -506,7 +536,12 @@ inline int receive_updated_blocks(std::vector<Block> &branch)
 
 inline int send_branch_to_fdb(std::vector<Block> &branch, std::vector<blkid_t> &branch_indexes)
 {
-	// create transaction
+#ifdef DEBUG
+    std::ofstream file("data.csv", std::ios::out | std::ios::app); // Open a file in append mode
+    file << "Key,Value\n"; // Headers for the columns
+#endif
+
+    // create transaction
 	if (fdb_database_create_transaction(db, &tr) != 0) {
 		ERROR("fdb_database_create_transaction");
 		return -1;
@@ -525,6 +560,22 @@ inline int send_branch_to_fdb(std::vector<Block> &branch, std::vector<blkid_t> &
 			temp[i] = (branch_indexes[current_bucket] & 0xff << 8 * (sizeof(blkid_t) - i)) >> 8 * (sizeof(blkid_t) - i);
 		}
 		fdb_transaction_set(tr, temp, sizeof(temp), bucket, sizeof(bucket));
+
+#ifdef DEBUG
+        // CSV writing part
+        // Printing key as a hex string in the first column
+        for (int i = sizeof(blkid_t); i != 0; --i) {
+            file << std::hex << std::setfill('0') << std::setw(2)
+                 << ((branch_indexes[current_bucket] >> 8 * (sizeof(blkid_t) - i)) & 0xff);
+        }
+        file << ","; // Delimiter
+
+        // Write value as a hex string in the second column
+        for (int i = 0; i < BLOCK_SIZE * BLOCKS_PER_BUCKET; ++i) {
+            file << std::hex << std::setfill('0') << std::setw(2) << static_cast<unsigned>(bucket[i]);
+        }
+        file << "\n"; // New line for next record
+#endif
 	}
 
 	status = fdb_transaction_commit(tr);
@@ -541,7 +592,10 @@ inline int send_branch_to_fdb(std::vector<Block> &branch, std::vector<blkid_t> &
 	status = NULL;
 	tr = NULL;
 
-	return 0;
+#ifdef DEBUG
+    file.close(); // Close the file stream
+#endif
+    return 0;
 }
 
 inline void close_connection()
