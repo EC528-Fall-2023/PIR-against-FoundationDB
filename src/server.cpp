@@ -424,7 +424,7 @@ inline int get_branch_indexes(std::vector<blkid_t> &branch_indexes, blkid_t leaf
 inline int get_branch_from_fdb(std::vector<Block> &branch, std::vector<blkid_t> &branch_indexes)
 {
 #ifdef DEBUG
-    std::ofstream file("data.csv", std::ios::out | std::ios::app); // Open a file in append mode
+    std::ofstream file("Attack/data.csv", std::ios::out | std::ios::app); // Open a file in append mode
     file << "Key,Value\n"; // Headers for the columns
 #endif
 
@@ -537,7 +537,7 @@ inline int receive_updated_blocks(std::vector<Block> &branch)
 inline int send_branch_to_fdb(std::vector<Block> &branch, std::vector<blkid_t> &branch_indexes)
 {
 #ifdef DEBUG
-    std::ofstream file("data.csv", std::ios::out | std::ios::app); // Open a file in append mode
+    std::ofstream file("Attack/data.csv", std::ios::out | std::ios::app); // Open a file in append mode
     file << "Key,Value\n"; // Headers for the columns
 #endif
 
