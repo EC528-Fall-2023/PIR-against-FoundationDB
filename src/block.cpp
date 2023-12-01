@@ -12,7 +12,7 @@ Block::Block(const Block &block)
 	is_encrypted = block.is_encrypted;
 }
 
-Block::Block(uint16_t block_id, const uint8_t *data, uint32_t data_size)
+Block::Block(blkid_t block_id, const uint8_t *data, uint32_t data_size)
 {
 	bytes.data_dec.block_id = block_id;
 	if (data_size < BYTES_PER_DATA) {

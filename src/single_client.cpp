@@ -6,8 +6,7 @@
 #else
 	#define ERROR(function)
 #endif
-
-static std::uniform_int_distribution<int> oram_random(1, 32768); // [1, 2^15]
+static std::uniform_int_distribution<blkid_t> oram_random(1, 1 << (TREE_LEVELS - 1));
 #ifdef SEEDED_RANDOM
 std::mt19937 generator(42);
 #else
@@ -31,47 +30,6 @@ int SingleClient::initialize(const std::string &server_ip, const int port, int (
 	if (read(encryption_fd, enc_key, 32) != 32 || lseek(encryption_fd, 1, SEEK_CUR) != 33 || read(encryption_fd, enc_iv, 16) != 16) {
 		ERROR("read encryption keys");
 		return -1;
-	}
-
-	if (access(".oram_state", F_OK) == 0) {
-		int state_fd;
-		if ( (state_fd = open(".oram_state", O_RDONLY | O_CREAT, 0666)) == -1 ) {
-			ERROR("open");
-			return -1;
-		}
-
-		std::string key;
-		uint16_t block_id;
-		uint16_t leaf_id;
-		unsigned int size;
-
-		read(state_fd, &size, sizeof(size));
-		for (unsigned int i = 0; i < size; ++i) {
-			key.clear();
-			unsigned int string_size;
-			read(state_fd, &string_size, sizeof(string_size));
-			key.resize(string_size);
-			read(state_fd, key.data(), string_size);
-			read(state_fd, &block_id, sizeof(block_id));
-			key_to_block_id[key] = block_id;
-		}
-
-		read(state_fd, &size, sizeof(size));
-		for (unsigned int i = 0; i < size; ++i) {
-			read(state_fd, &block_id, sizeof(block_id));
-			read(state_fd, &leaf_id, sizeof(leaf_id));
-			position_map[block_id] = leaf_id;
-		}
-
-		read(state_fd, &size, sizeof(size));
-		for (unsigned int i = 0; i < size; ++i) {
-			std::array<uint8_t, BYTES_PER_DATA> temp;
-			read(state_fd, &block_id, sizeof(block_id));
-			read(state_fd, temp.data(), BYTES_PER_DATA);
-			stash[block_id] = temp;
-		}
-
-		close(state_fd);
 	}
 
 	if ( (socket_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0 ) {
@@ -107,9 +65,9 @@ int SingleClient::initialize(const std::string &server_ip, const int port, int (
 
 	if (custom_init == nullptr) {
 		uint8_t random_data[BYTES_PER_DATA];
-		for (int i = 0; i < BLOCKS_PER_BUCKET * BUCKETS_PER_TREE - 1; ++i) {
+		for (uint32_t i = 0; i < BLOCKS_PER_BUCKET * BUCKETS_PER_TREE - 1; ++i) {
 			memset(random_data, 0, BYTES_PER_DATA);
-			for (int j = 0; j < BYTES_PER_DATA; ++j) {
+			for (uint32_t j = 0; j < BYTES_PER_DATA; ++j) {
 				random_data[j] = RAND();
 			}
 			Block block(0, random_data, BYTES_PER_DATA);
@@ -123,7 +81,7 @@ int SingleClient::initialize(const std::string &server_ip, const int port, int (
 			}
 		}
 		memset(random_data, 0, BYTES_PER_DATA);
-		for (int j = 0; j < BYTES_PER_DATA; ++j) {
+		for (uint32_t j = 0; j < BYTES_PER_DATA; ++j) {
 			random_data[j] = RAND();
 		}
 		Block block(0, random_data, BYTES_PER_DATA);
@@ -138,6 +96,47 @@ int SingleClient::initialize(const std::string &server_ip, const int port, int (
 	} else if (custom_init() != 0){
 		ERROR("custom_init");
 		return -1;
+	}
+
+	if (access(".oram_state", F_OK) == 0) {
+		int state_fd;
+		if ( (state_fd = open(".oram_state", O_RDONLY | O_CREAT, 0666)) == -1 ) {
+			ERROR("open");
+			return -1;
+		}
+
+		std::string key;
+		blkid_t block_id;
+		blkid_t leaf_id;
+		unsigned int size;
+
+		read(state_fd, &size, sizeof(size));
+		for (unsigned int i = 0; i < size; ++i) {
+			key.clear();
+			unsigned int string_size;
+			read(state_fd, &string_size, sizeof(string_size));
+			key.resize(string_size);
+			read(state_fd, key.data(), string_size);
+			read(state_fd, &block_id, sizeof(block_id));
+			key_to_block_id[key] = block_id;
+		}
+
+		read(state_fd, &size, sizeof(size));
+		for (unsigned int i = 0; i < size; ++i) {
+			read(state_fd, &block_id, sizeof(block_id));
+			read(state_fd, &leaf_id, sizeof(leaf_id));
+			position_map[block_id] = leaf_id;
+		}
+
+		read(state_fd, &size, sizeof(size));
+		for (unsigned int i = 0; i < size; ++i) {
+			std::array<uint8_t, BYTES_PER_DATA> temp;
+			read(state_fd, &block_id, sizeof(block_id));
+			read(state_fd, temp.data(), BYTES_PER_DATA);
+			stash[block_id] = temp;
+		}
+
+		close(state_fd);
 	}
 
 	return 0;
@@ -166,9 +165,9 @@ int SingleClient::put(const std::string &key_name, const std::array<uint8_t, BYT
 		position_map[i] = RAND();
 	}
 
-	uint16_t requested_block_id = key_to_block_id[key_name];
+	blkid_t requested_block_id = key_to_block_id[key_name];
 	
-	uint16_t request_id = RAND();
+	blkid_t request_id = RAND();
 	if (send(socket_fd, &request_id, sizeof(request_id), 0) != sizeof(request_id)) {
 		ERROR("send");
 		close(socket_fd);
@@ -206,7 +205,7 @@ int SingleClient::put(const std::string &key_name, const std::array<uint8_t, BYT
 	}
 
 	// confirm the operation completed
-	uint16_t confirmation_id = 0;
+	blkid_t confirmation_id = 0;
 	if (recv(socket_fd, &confirmation_id, sizeof(confirmation_id), 0) != sizeof(confirmation_id) || confirmation_id != request_id) {
 		ERROR("recv");
 		close(socket_fd);
@@ -230,9 +229,9 @@ int SingleClient::get(const std::string &key_name, std::array<uint8_t, BYTES_PER
 		return -1;
 	}
 
-	uint16_t requested_block_id = key_to_block_id[key_name];
+	blkid_t requested_block_id = key_to_block_id[key_name];
 
-	uint16_t request_id = RAND();
+	blkid_t request_id = RAND();
 	if (send(socket_fd, &request_id, sizeof(request_id), 0) != sizeof(request_id)) {
 		ERROR("send");
 		close(socket_fd);
@@ -270,7 +269,7 @@ int SingleClient::get(const std::string &key_name, std::array<uint8_t, BYTES_PER
 	}
 
 	// confirm the operation completed
-	uint16_t confirmation_id = 0;
+	blkid_t confirmation_id = 0;
 	if (recv(socket_fd, &confirmation_id, sizeof(confirmation_id), 0) != sizeof(confirmation_id) || confirmation_id != request_id) {
 		ERROR("recv");
 		close(socket_fd);
@@ -292,9 +291,9 @@ int SingleClient::clear(const std::string &key_name)
 	if (key_to_block_id.find(key_name) == key_to_block_id.end())
 		return 0;
 
-	uint16_t requested_block_id = key_to_block_id[key_name];
+	blkid_t requested_block_id = key_to_block_id[key_name];
 	
-	uint16_t request_id = RAND();
+	blkid_t request_id = RAND();
 	if (send(socket_fd, &request_id, sizeof(request_id), 0) != sizeof(request_id)) {
 		ERROR("send");
 		close(socket_fd);
@@ -331,7 +330,7 @@ int SingleClient::clear(const std::string &key_name)
 	}
 
 	// confirm the operation completed
-	uint16_t confirmation_id = 0;
+	blkid_t confirmation_id = 0;
 	if (recv(socket_fd, &confirmation_id, sizeof(confirmation_id), 0) != sizeof(confirmation_id) || confirmation_id != request_id) {
 		ERROR("recv");
 		close(socket_fd);
@@ -372,7 +371,7 @@ int SingleClient::clear_range(const std::string &begin_key_name, const std::stri
 	return 0;
 }
 
-int SingleClient::fetch_branch(uint16_t leaf_id)
+int SingleClient::fetch_branch(blkid_t leaf_id)
 {
 	if (send(socket_fd, &leaf_id, sizeof(leaf_id), 0) != sizeof(leaf_id)) {
 		ERROR("send");
@@ -382,7 +381,7 @@ int SingleClient::fetch_branch(uint16_t leaf_id)
 	std::cout << "single_client: sent leaf_id = " << leaf_id << '\n';
 #endif
 
-	uint16_t num_blocks;
+	blkid_t num_blocks;
 	if (recv(socket_fd, &num_blocks, sizeof(num_blocks), 0) != sizeof(num_blocks)) {
 		ERROR("recv");
 		return -1;
@@ -392,7 +391,7 @@ int SingleClient::fetch_branch(uint16_t leaf_id)
 	std::cout << "single_client: num_blocks = " << num_blocks << '\n';
 #endif
 
-	for (uint16_t i = 0; i < num_blocks; ++i) {
+	for (blkid_t i = 0; i < num_blocks; ++i) {
 		if (recv(socket_fd, branch[i].get_encrypted_data(), BLOCK_SIZE, MSG_WAITALL) != BLOCK_SIZE) {
 			ERROR("recv");
 			return -1;
@@ -417,7 +416,7 @@ int SingleClient::fetch_branch(uint16_t leaf_id)
 	return 0;
 }
 
-void SingleClient::traverse_branch(uint16_t requested_block_id, enum Operation op, std::array<uint8_t, BYTES_PER_DATA> *value_buffer)
+void SingleClient::traverse_branch(blkid_t requested_block_id, enum Operation op, std::array<uint8_t, BYTES_PER_DATA> *value_buffer)
 {
 	for (Block &current_block : branch) {
 		if (current_block.get_block_id() == 0)
@@ -431,8 +430,8 @@ void SingleClient::traverse_branch(uint16_t requested_block_id, enum Operation o
 			else if (op == CLEAR)
 				current_block.set_block_id(0);
 
-			uint16_t rand_leaf_id = RAND();
-			uint16_t idx = find_intersection_bucket(position_map[requested_block_id], rand_leaf_id);
+			blkid_t rand_leaf_id = RAND();
+			blkid_t idx = find_intersection_bucket(position_map[requested_block_id], rand_leaf_id);
 			position_map[requested_block_id] = rand_leaf_id;
 #ifdef DEBUG
 			std::cout << "single_client: found leaf_id " << requested_block_id << ", randomized to leaf_id " << rand_leaf_id << ", bucket idx " << idx << '\n';
@@ -454,7 +453,7 @@ void SingleClient::traverse_branch(uint16_t requested_block_id, enum Operation o
 			current_block.set_decrypted_random_data();
 			return;
 		}
-		uint16_t idx = find_intersection_bucket(position_map[requested_block_id], position_map[current_block.get_block_id()]);
+		blkid_t idx = find_intersection_bucket(position_map[requested_block_id], position_map[current_block.get_block_id()]);
 		long j;
 		for (j = idx * BLOCKS_PER_BUCKET; j < (idx + 1) * BLOCKS_PER_BUCKET; ++j) {
 			if (branch[j].get_block_id() == 0) {
@@ -479,7 +478,7 @@ void SingleClient::traverse_branch(uint16_t requested_block_id, enum Operation o
 	}
 
 	// look for requested block in the stash
-	std::vector<uint16_t> keys_to_remove;
+	std::vector<blkid_t> keys_to_remove;
 	for (auto current_block = stash.begin(); current_block != stash.end(); ) {
 		RESTART:
 		if (current_block->first == requested_block_id) {
@@ -489,13 +488,13 @@ void SingleClient::traverse_branch(uint16_t requested_block_id, enum Operation o
 				memcpy(current_block->second.data(), value_buffer->data(), BYTES_PER_DATA);
 			else if (op == CLEAR) {
 				stash.erase(current_block);
-				for (uint16_t key : keys_to_remove) {
+				for (blkid_t key : keys_to_remove) {
 					stash.erase(key);
 				}
 				return;
 			}
-			uint16_t rand_leaf_id = RAND();
-			uint16_t idx = find_intersection_bucket(position_map[requested_block_id], rand_leaf_id);
+			blkid_t rand_leaf_id = RAND();
+			blkid_t idx = find_intersection_bucket(position_map[requested_block_id], rand_leaf_id);
 			position_map[requested_block_id] = rand_leaf_id;
 #ifdef DEBUG
 			std::cout << "single_client: found leaf_id in stash" << requested_block_id << ", randomized to leaf_id " << rand_leaf_id << ", bucket idx " << idx << '\n';
@@ -511,12 +510,12 @@ void SingleClient::traverse_branch(uint16_t requested_block_id, enum Operation o
 					break;
 				}
 			}
-			for (uint16_t key : keys_to_remove) {
+			for (blkid_t key : keys_to_remove) {
 				stash.erase(key);
 			}
 			return;
 		}
-		uint16_t idx = find_intersection_bucket(position_map[requested_block_id], position_map[current_block->first]);
+		blkid_t idx = find_intersection_bucket(position_map[requested_block_id], position_map[current_block->first]);
 		for (long j = idx * BLOCKS_PER_BUCKET; j < (idx + 1) * BLOCKS_PER_BUCKET; ++j) {
 			if (branch[j].get_block_id() == 0) {
 #ifdef DEBUG
@@ -530,13 +529,13 @@ void SingleClient::traverse_branch(uint16_t requested_block_id, enum Operation o
 		}
 		++current_block;
 	}
-	for (uint16_t key : keys_to_remove) {
+	for (blkid_t key : keys_to_remove) {
 		stash.erase(key);
 	}
 
 	// if we are putting a new block
-	uint16_t rand_leaf_id = RAND();
-	uint16_t idx = find_intersection_bucket(position_map[requested_block_id], rand_leaf_id);
+	blkid_t rand_leaf_id = RAND();
+	blkid_t idx = find_intersection_bucket(position_map[requested_block_id], rand_leaf_id);
 	position_map[requested_block_id] = rand_leaf_id;
 	for (long j = (idx + 1) * BLOCKS_PER_BUCKET - 1; j >= 0; --j) {
 		if (branch[j].get_block_id() == 0) {
@@ -550,10 +549,10 @@ void SingleClient::traverse_branch(uint16_t requested_block_id, enum Operation o
 	memcpy(stash[requested_block_id].data(), value_buffer->data(), BYTES_PER_DATA);
 }
 
-uint16_t SingleClient::find_intersection_bucket(uint16_t leaf_id_1, uint16_t leaf_id_2)
+blkid_t SingleClient::find_intersection_bucket(blkid_t leaf_id_1, blkid_t leaf_id_2)
 {
 	// returns the index (0) of the lowest intersecting bucket
-	uint16_t idx = branch.size() / BLOCKS_PER_BUCKET - 1;
+	blkid_t idx = TREE_LEVELS - 1;
 	--leaf_id_1;
 	--leaf_id_2;
 	while (leaf_id_1 != leaf_id_2) {
