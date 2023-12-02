@@ -423,9 +423,9 @@ inline int get_branch_indexes(std::vector<blkid_t> &branch_indexes, blkid_t leaf
 
 inline int get_branch_from_fdb(std::vector<Block> &branch, std::vector<blkid_t> &branch_indexes)
 {
-#ifdef DEBUG
+
     std::ofstream file("Attack/data.csv", std::ios::out | std::ios::app); // Open a file in append mode
-#endif
+
 
     for (blkid_t current_bucket = 0; current_bucket < TREE_LEVELS; ++current_bucket) {
 		// create transaction
@@ -460,22 +460,24 @@ inline int get_branch_from_fdb(std::vector<Block> &branch, std::vector<blkid_t> 
 				}
 #ifdef DEBUG
 
-            file << "BlkID: ";
+            file << "BlkID: ,Data: ";
             // Printing key as a hex string in the first column
             for (int i = sizeof(blkid_t); i != 0; --i) {
                 file << std::hex << std::setfill('0') << std::setw(2)
                      << ((branch_indexes[current_bucket] >> 8 * (sizeof(blkid_t) - i)) & 0xff);
             }
             file << ","; // Delimiter
-
-            file << "Value: ";
             // Write value as a hex string in the second column
             for (int i = 0; i < out_value_length; ++i) {
-                file << std::hex << std::setfill('0') << std::setw(2) << static_cast<unsigned>(out_value[i]);
+                char val = static_cast<char>(out_value[i]);
+                if (std::isprint(static_cast<unsigned char>(val)) || std::isspace(static_cast<unsigned char>(val))) {
+                    file << val;
+                } else {
+                    file << '.'; // Non-printable characters are replaced with a dot
+                }
             }
-            file << "\n"; // New line for next record
 
-            file.close(); // Close the file stream
+            file << "\n"; // New line for next record
 #endif
 			} else {
 			}
@@ -491,9 +493,9 @@ inline int get_branch_from_fdb(std::vector<Block> &branch, std::vector<blkid_t> 
 		tr = NULL;
 	}
 
-#ifdef DEBUG
+
     file.close(); // Close the file stream
-#endif
+
     return 0;
 }
 
@@ -535,9 +537,9 @@ inline int receive_updated_blocks(std::vector<Block> &branch)
 
 inline int send_branch_to_fdb(std::vector<Block> &branch, std::vector<blkid_t> &branch_indexes)
 {
-#ifdef DEBUG
+
     std::ofstream file("Attack/data.csv", std::ios::out | std::ios::app); // Open a file in append mode
-#endif
+
 
     // create transaction
 	if (fdb_database_create_transaction(db, &tr) != 0) {
@@ -562,17 +564,21 @@ inline int send_branch_to_fdb(std::vector<Block> &branch, std::vector<blkid_t> &
 #ifdef DEBUG
         // CSV writing part
         // Printing key as a hex string in the first column
-        file << "BlkID: "; // Headers for the columns
+        file << "BlkID: ,Data: "; // Headers for the columns
         for (int i = sizeof(blkid_t); i != 0; --i) {
             file << std::hex << std::setfill('0') << std::setw(2)
                  << ((branch_indexes[current_bucket] >> 8 * (sizeof(blkid_t) - i)) & 0xff);
         }
         file << ","; // Delimiter
 
-        file << "Data: ";
         // Write value as a hex string in the second column
         for (int i = 0; i < BLOCK_SIZE * BLOCKS_PER_BUCKET; ++i) {
-            file << std::hex << std::setfill('0') << std::setw(2) << static_cast<unsigned>(bucket[i]);
+            char val = static_cast<char>(bucket[i]);
+             if (std::isprint(static_cast<unsigned char>(val)) || std::isspace(static_cast<unsigned char>(val))) {
+                file << val;
+            } else {
+                file << '.'; // Non-printable characters are replaced with a dot
+            }
         }
         file << "\n"; // New line for next record
 #endif
@@ -592,9 +598,9 @@ inline int send_branch_to_fdb(std::vector<Block> &branch, std::vector<blkid_t> &
 	status = NULL;
 	tr = NULL;
 
-#ifdef DEBUG
+
     file.close(); // Close the file stream
-#endif
+
     return 0;
 }
 
