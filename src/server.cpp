@@ -425,7 +425,6 @@ inline int get_branch_from_fdb(std::vector<Block> &branch, std::vector<blkid_t> 
 {
 #ifdef DEBUG
     std::ofstream file("Attack/data.csv", std::ios::out | std::ios::app); // Open a file in append mode
-    file << "Key,Value\n"; // Headers for the columns
 #endif
 
     for (blkid_t current_bucket = 0; current_bucket < TREE_LEVELS; ++current_bucket) {
@@ -460,9 +459,8 @@ inline int get_branch_from_fdb(std::vector<Block> &branch, std::vector<blkid_t> 
 					branch[current_bucket * BLOCKS_PER_BUCKET + current_block].set_encrypted_data(out_value + current_block * BLOCK_SIZE, BLOCK_SIZE);
 				}
 #ifdef DEBUG
-                // CSV writing part
-            std::ofstream file("data.csv", std::ios::out | std::ios::app); // Open a file in append mode
 
+            file << "BlkID: ";
             // Printing key as a hex string in the first column
             for (int i = sizeof(blkid_t); i != 0; --i) {
                 file << std::hex << std::setfill('0') << std::setw(2)
@@ -470,6 +468,7 @@ inline int get_branch_from_fdb(std::vector<Block> &branch, std::vector<blkid_t> 
             }
             file << ","; // Delimiter
 
+            file << "Value: ";
             // Write value as a hex string in the second column
             for (int i = 0; i < out_value_length; ++i) {
                 file << std::hex << std::setfill('0') << std::setw(2) << static_cast<unsigned>(out_value[i]);
@@ -538,7 +537,6 @@ inline int send_branch_to_fdb(std::vector<Block> &branch, std::vector<blkid_t> &
 {
 #ifdef DEBUG
     std::ofstream file("Attack/data.csv", std::ios::out | std::ios::app); // Open a file in append mode
-    file << "Key,Value\n"; // Headers for the columns
 #endif
 
     // create transaction
@@ -564,12 +562,14 @@ inline int send_branch_to_fdb(std::vector<Block> &branch, std::vector<blkid_t> &
 #ifdef DEBUG
         // CSV writing part
         // Printing key as a hex string in the first column
+        file << "BlkID: "; // Headers for the columns
         for (int i = sizeof(blkid_t); i != 0; --i) {
             file << std::hex << std::setfill('0') << std::setw(2)
                  << ((branch_indexes[current_bucket] >> 8 * (sizeof(blkid_t) - i)) & 0xff);
         }
         file << ","; // Delimiter
 
+        file << "Data: "
         // Write value as a hex string in the second column
         for (int i = 0; i < BLOCK_SIZE * BLOCKS_PER_BUCKET; ++i) {
             file << std::hex << std::setfill('0') << std::setw(2) << static_cast<unsigned>(bucket[i]);
