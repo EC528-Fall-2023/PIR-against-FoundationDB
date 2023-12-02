@@ -569,7 +569,7 @@ inline int send_branch_to_fdb(std::vector<Block> &branch, std::vector<blkid_t> &
         }
         file << ","; // Delimiter
 
-        file << "Data: "
+        file << "Data: ";
         // Write value as a hex string in the second column
         for (int i = 0; i < BLOCK_SIZE * BLOCKS_PER_BUCKET; ++i) {
             file << std::hex << std::setfill('0') << std::setw(2) << static_cast<unsigned>(bucket[i]);
