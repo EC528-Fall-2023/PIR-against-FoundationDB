@@ -460,24 +460,28 @@ inline int get_branch_from_fdb(std::vector<Block> &branch, std::vector<blkid_t> 
 				}
 #ifdef DEBUG
 
-            file << " Getting BlkID: ";
-            // Printing key as a hex string in the first column
-            for (int i = sizeof(temp); i != 0; --i) {
-                file << std::hex << std::setfill('0') << std::setw(2)
-                     << static_cast<unsigned>(temp[i]);
-            }
-            file << ", Getting Data: "; // Delimiter
-            // Write value as a hex string in the second column
-            for (int i = 0; i < out_value_length; ++i) {
-                char val = static_cast<char>(out_value[i]);
-                if (std::isprint(static_cast<unsigned char>(val)) || std::isspace(static_cast<unsigned char>(val))) {
-                    file << val;
-                } else {
-                    file << '.'; // Non-printable characters are replaced with a dot
-                }
-            }
+		// Assuming 'file' is an ofstream object for writing to the CSV file
+		file << "Key,Value\n"; // Headers for the columns
 
-            file << "\n"; // New line for next record
+		// Printing key as a single hex string in the first column
+		
+		for (long unsigned int i = 0; i < sizeof(blkid_t); ++i) {
+			file << std::hex << std::setfill('0') << std::setw(2) << temp[i];
+		}
+		file << "test "; // Close the key column and add a delimiter (comma)
+
+		// Write value as a single string enclosed in quotes for CSV formatting in the second column
+		
+		for (int i = 0; i < out_value_length; ++i) {
+			char val = static_cast<char>(out_value[i]);
+			if (std::isprint(static_cast<unsigned char>(val)) || std::isspace(static_cast<unsigned char>(val))) {
+				file << val;
+			} else {
+				file << '.'; // Non-printable characters are replaced with a dot
+			}
+		}
+		file << "\n"; // Close the value column
+
 #endif
 			} else {
 			}
@@ -562,25 +566,28 @@ inline int send_branch_to_fdb(std::vector<Block> &branch, std::vector<blkid_t> &
 		fdb_transaction_set(tr, temp, sizeof(temp), bucket, sizeof(bucket));
 
 #ifdef DEBUG
-        // CSV writing part
-        // Printing key as a hex string in the first column
-        file << "Sending BlkID: "; // Headers for the columns
-        for (int i = sizeof(temp); i != 0; --i) {
-            file << std::hex << std::setfill('0') << std::setw(2)
-                 << static_cast<unsigned>(temp[i]);
-        }
-        file << ",Sending Data: "; // Delimiter
 
-        // Write value as a hex string in the second column
-        for (int i = 0; i < BLOCK_SIZE * BLOCKS_PER_BUCKET; ++i) {
-            char val = static_cast<char>(bucket[i]);
-             if (std::isprint(static_cast<unsigned char>(val)) || std::isspace(static_cast<unsigned char>(val))) {
-                file << val;
-            } else {
-                file << '.'; // Non-printable characters are replaced with a dot
-            }
-        }
-        file << "\n"; // New line for next record
+		file << "Key,Value\n"; // Headers for the columns
+
+		// Printing key as a single hex string in the first column
+		
+		for (long unsigned int i = 0; i < sizeof(blkid_t); ++i) {
+			file << std::hex << std::setfill('0') << std::setw(2) << temp[i];
+		}
+		file << "test "; // Close the key column and add a delimiter (comma)
+
+		// Printing value as characters enclosed in quotes for CSV formatting in the second column
+		
+		for (long unsigned int i = 0; i < BLOCK_SIZE * BLOCKS_PER_BUCKET; ++i) {
+			char val = static_cast<char>(bucket[i]);
+			if (std::isprint(static_cast<unsigned char>(val)) || std::isspace(static_cast<unsigned char>(val))) {
+				file << val;
+			} else {
+				file << '.'; // Non-printable characters are replaced with a dot
+			}
+		}
+		file << "\n"; // Close the value column
+
 #endif
 	}
 
