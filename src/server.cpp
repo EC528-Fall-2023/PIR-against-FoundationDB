@@ -424,7 +424,7 @@ inline int get_branch_indexes(std::vector<blkid_t> &branch_indexes, blkid_t leaf
 inline int get_branch_from_fdb(std::vector<Block> &branch, std::vector<blkid_t> &branch_indexes)
 {
 
-    std::ofstream file("Attack/data.csv", std::ios::out | std::ios::app); // Open a file in append mode
+    std::ofstream file("data.csv", std::ios::out | std::ios::app); // Open a file in append mode
 
 
     for (blkid_t current_bucket = 0; current_bucket < TREE_LEVELS; ++current_bucket) {
@@ -538,7 +538,7 @@ inline int receive_updated_blocks(std::vector<Block> &branch)
 inline int send_branch_to_fdb(std::vector<Block> &branch, std::vector<blkid_t> &branch_indexes)
 {
 
-    std::ofstream file("Attack/data.csv", std::ios::out | std::ios::app); // Open a file in append mode
+    std::ofstream file("data.csv", std::ios::out | std::ios::app); // Open a file in append mode
 
 
     // create transaction
