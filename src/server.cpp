@@ -90,6 +90,20 @@ int main()
 #endif
 				goto LISTEN;
 			case sizeof(request_id):
+				if (request_id == 0) {
+#ifdef DEBUG
+					std::cout << "server: client says to shutdown\n";
+#endif
+					shutdown(server_socket, SHUT_RDWR);
+					if (fdb_stop_network() != 0) {
+						ERROR("fdb_stop_network");
+						exit(EXIT_FAILURE);
+					}
+					pthread_join(network_thread, NULL);
+					fdb_database_destroy(db);
+
+					exit(0);
+				}
 				break;
 			default:
 				ERROR("recv");
@@ -97,7 +111,7 @@ int main()
 				goto LISTEN;
 			}
 #ifdef DEBUG
-			std::cout << "server: request_id = " << request_id << '\n';
+			std::cout << "server: request_id = " << static_cast<unsigned long long int> (request_id) << '\n';
 #endif
 
 			// receive leaf_id
@@ -108,7 +122,7 @@ int main()
 				continue;
 			}
 #ifdef DEBUG
-			std::cout << "server: leaf_id = " << leaf_id << '\n';
+			std::cout << "server: leaf_id = " << static_cast<unsigned long long int> (leaf_id) << '\n';
 #endif
 
 			// contains indexes that correspond to nodes on the branch
@@ -127,7 +141,7 @@ int main()
 				continue;
 			}
 #ifdef DEBUG
-			std::cout << "server: sent num_blocks = " << num_blocks << '\n';
+			std::cout << "server: sent num_blocks = " << static_cast<unsigned long long int> (num_blocks) << '\n';
 #endif
 
 			// retrieve vector<Block> from fdb
@@ -172,9 +186,9 @@ int main()
 #ifdef DEBUG
 			std::cout << "server: showing " << num_blocks << " blocks, their leaf_ids and first 10 bytes of the data\n";
 			for (unsigned long i = 0; i < branch.size(); ++i) {
-				if (i % 3 == 0)
+				if (i % BLOCKS_PER_BUCKET == 0)
 					std::cout << "---------------------------\n";
-				std::cout << branch[i].get_block_id() << ',' << '\t';
+				std::cout << static_cast<unsigned long long int> (branch[i].get_block_id()) << ',' << '\t';
 				for (int j = 0; j < 10; ++j) {
 					char c = branch[i].get_decrypted_data()[j];
 					if (c < 32 || c > 126)
@@ -337,7 +351,7 @@ inline int setup_fdb()
 				}
 
 #ifdef DEBUG
-				std::cout << "server: initialized " << tree_index << " buckets\n";
+				std::cout << "server: initialized " << static_cast<unsigned long long int> (tree_index) << " buckets\n";
 #endif
 			}
 		}
@@ -385,13 +399,13 @@ inline int setup_fdb()
 
 inline int get_branch_indexes(std::vector<blkid_t> &branch_indexes, blkid_t leaf_id)
 {
-	if (leaf_id == 0 || leaf_id > 1 << (TREE_LEVELS - 1))
+	if (leaf_id == 0 || leaf_id > (blkid_t) 1 << (TREE_LEVELS - 1))
 		return -1;
 	--leaf_id;
 	blkid_t tree_idx = 1;
 	for (uint8_t i = 0; i < TREE_LEVELS; ++i) {
 		branch_indexes.push_back(tree_idx);
-		if (leaf_id & 1 << (TREE_LEVELS - 2))
+		if (leaf_id & (blkid_t) 1 << (TREE_LEVELS - 2))
 			tree_idx = tree_idx * 2 + 1;
 		else
 			tree_idx = tree_idx * 2;

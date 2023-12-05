@@ -38,6 +38,7 @@ int main()
 
 			std::cout << "cleared: austin" << '\n';
 		} else if (option == "q" || option == "quit") {
+			client.shutdown();
 			return 0;
 		} else {
 			std::cout << "usage: <operation> <key> <data>\n";

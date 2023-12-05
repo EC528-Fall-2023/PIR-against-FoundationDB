@@ -6,7 +6,7 @@
 #else
 	#define ERROR(function)
 #endif
-static std::uniform_int_distribution<blkid_t> oram_random(1, 1 << (TREE_LEVELS - 1));
+static std::uniform_int_distribution<blkid_t> oram_random(1, (blkid_t) 1 << (TREE_LEVELS - 1));
 #ifdef SEEDED_RANDOM
 std::mt19937 generator(42);
 #else
@@ -14,7 +14,13 @@ static std::random_device generator;
 #endif
 #define RAND() oram_random(generator)
 
-SingleClient::SingleClient() {}
+SingleClient::SingleClient()
+{
+	socket_fd = -1;
+	memset(&server_addr, 0, sizeof(server_addr));
+	memset(enc_key, 0, sizeof(enc_key));
+	memset(enc_iv, 0, sizeof(enc_iv));
+}
 
 int SingleClient::initialize(const std::string &server_ip, const int port, int (*custom_init)())
 {
@@ -53,6 +59,47 @@ int SingleClient::initialize(const std::string &server_ip, const int port, int (
 #ifdef DEBUG
 	std::cout << "single_client: connection to " << server_ip << ':' << port << " established\n";
 #endif
+
+	if (access(".oram_state", F_OK) == 0) {
+		int state_fd;
+		if ( (state_fd = open(".oram_state", O_RDONLY | O_CREAT, 0666)) == -1 ) {
+			ERROR("open");
+			return -1;
+		}
+
+		std::string key;
+		blkid_t block_id;
+		blkid_t leaf_id;
+		unsigned int size;
+
+		read(state_fd, &size, sizeof(size));
+		for (unsigned int i = 0; i < size; ++i) {
+			key.clear();
+			unsigned int string_size;
+			read(state_fd, &string_size, sizeof(string_size));
+			key.resize(string_size);
+			read(state_fd, key.data(), string_size);
+			read(state_fd, &block_id, sizeof(block_id));
+			key_to_block_id[key] = block_id;
+		}
+
+		read(state_fd, &size, sizeof(size));
+		for (unsigned int i = 0; i < size; ++i) {
+			read(state_fd, &block_id, sizeof(block_id));
+			read(state_fd, &leaf_id, sizeof(leaf_id));
+			position_map[block_id] = leaf_id;
+		}
+
+		read(state_fd, &size, sizeof(size));
+		for (unsigned int i = 0; i < size; ++i) {
+			std::array<uint8_t, BYTES_PER_DATA> temp;
+			read(state_fd, &block_id, sizeof(block_id));
+			read(state_fd, temp.data(), BYTES_PER_DATA);
+			stash[block_id] = temp;
+		}
+
+		close(state_fd);
+	}
 
 	uint8_t fdb_is_initialized;
 	if (recv(socket_fd, &fdb_is_initialized, sizeof(fdb_is_initialized), 0) != sizeof(fdb_is_initialized)) {
@@ -98,46 +145,26 @@ int SingleClient::initialize(const std::string &server_ip, const int port, int (
 		return -1;
 	}
 
-	if (access(".oram_state", F_OK) == 0) {
-		int state_fd;
-		if ( (state_fd = open(".oram_state", O_RDONLY | O_CREAT, 0666)) == -1 ) {
-			ERROR("open");
-			return -1;
-		}
+	return 0;
+}
 
-		std::string key;
-		blkid_t block_id;
-		blkid_t leaf_id;
-		unsigned int size;
-
-		read(state_fd, &size, sizeof(size));
-		for (unsigned int i = 0; i < size; ++i) {
-			key.clear();
-			unsigned int string_size;
-			read(state_fd, &string_size, sizeof(string_size));
-			key.resize(string_size);
-			read(state_fd, key.data(), string_size);
-			read(state_fd, &block_id, sizeof(block_id));
-			key_to_block_id[key] = block_id;
-		}
-
-		read(state_fd, &size, sizeof(size));
-		for (unsigned int i = 0; i < size; ++i) {
-			read(state_fd, &block_id, sizeof(block_id));
-			read(state_fd, &leaf_id, sizeof(leaf_id));
-			position_map[block_id] = leaf_id;
-		}
-
-		read(state_fd, &size, sizeof(size));
-		for (unsigned int i = 0; i < size; ++i) {
-			std::array<uint8_t, BYTES_PER_DATA> temp;
-			read(state_fd, &block_id, sizeof(block_id));
-			read(state_fd, temp.data(), BYTES_PER_DATA);
-			stash[block_id] = temp;
-		}
-
-		close(state_fd);
+int SingleClient::shutdown()
+{
+	if (socket_fd == -1) {
+		ERROR("socket_fd");
+		return -1;
 	}
+
+	// request_id = 0 -> exit server process
+	blkid_t request_id = 0;
+	if (send(socket_fd, &request_id, sizeof(request_id), 0) != sizeof(request_id)) {
+		ERROR("send");
+		close(socket_fd);
+		return -1;
+	}
+#ifdef DEBUG
+	std::cout << "single_client: request_id = " << static_cast<unsigned long long int> (request_id) << '\n';
+#endif
 
 	return 0;
 }
@@ -174,7 +201,7 @@ int SingleClient::put(const std::string &key_name, const std::array<uint8_t, BYT
 		return -1;
 	}
 #ifdef DEBUG
-	std::cout << "single_client: request_id = " << request_id << '\n';
+	std::cout << "single_client: request_id = " << static_cast<unsigned long long int> (request_id) << '\n';
 #endif
 
 	if (fetch_branch(position_map[requested_block_id]) == -1) {
@@ -191,7 +218,7 @@ int SingleClient::put(const std::string &key_name, const std::array<uint8_t, BYT
 	for (uint32_t i = 0; i < branch.size(); ++i) {
 		if (i % BLOCKS_PER_BUCKET == 0)
 			std::cout << " |";
-		std::cout << ' ' << branch[i].get_block_id();
+		std::cout << ' ' << static_cast<unsigned long long int> (branch[i].get_block_id());
 	}
 	std::cout << '\n';
 	std::cout << "single_client: recv " << branch.size() << " blocks\n";
@@ -238,7 +265,7 @@ int SingleClient::get(const std::string &key_name, std::array<uint8_t, BYTES_PER
 		return -1;
 	}
 #ifdef DEBUG
-	std::cout << "single_client: request_id = " << request_id << '\n';
+	std::cout << "single_client: request_id = " << static_cast<unsigned long long int> (request_id) << '\n';
 #endif
 
 	if (fetch_branch(position_map[requested_block_id]) == -1) {
@@ -255,7 +282,7 @@ int SingleClient::get(const std::string &key_name, std::array<uint8_t, BYTES_PER
 	for (uint32_t i = 0; i < branch.size(); ++i) {
 		if (i % BLOCKS_PER_BUCKET == 0)
 			std::cout << " |";
-		std::cout << ' ' << branch[i].get_block_id();
+		std::cout << ' ' << static_cast<unsigned long long int> (branch[i].get_block_id());
 	}
 	std::cout << '\n';
 	std::cout << "single_client: recv " << branch.size() << " blocks\n";
@@ -300,7 +327,7 @@ int SingleClient::clear(const std::string &key_name)
 		return -1;
 	}
 #ifdef DEBUG
-	std::cout << "single_client: request_id = " << request_id << '\n';
+	std::cout << "single_client: request_id = " << static_cast<unsigned long long int> (request_id) << '\n';
 #endif
 
 	if (fetch_branch(position_map[requested_block_id]) == -1) {
@@ -316,7 +343,7 @@ int SingleClient::clear(const std::string &key_name)
 	for (uint32_t i = 0; i < branch.size(); ++i) {
 		if (i % BLOCKS_PER_BUCKET == 0)
 			std::cout << " |";
-		std::cout << ' ' << branch[i].get_block_id();
+		std::cout << ' ' << static_cast<unsigned long long int> (branch[i].get_block_id());
 	}
 	std::cout << '\n';
 	std::cout << "single_client: recv " << branch.size() << " blocks\n";
@@ -378,7 +405,7 @@ int SingleClient::fetch_branch(blkid_t leaf_id)
 		return -1;
 	}
 #ifdef DEBUG
-	std::cout << "single_client: sent leaf_id = " << leaf_id << '\n';
+	std::cout << "single_client: sent leaf_id = " << static_cast<unsigned long long int> (leaf_id) << '\n';
 #endif
 
 	blkid_t num_blocks;
@@ -388,7 +415,7 @@ int SingleClient::fetch_branch(blkid_t leaf_id)
 	}
 	branch.resize(num_blocks);
 #ifdef DEBUG
-	std::cout << "single_client: num_blocks = " << num_blocks << '\n';
+	std::cout << "single_client: num_blocks = " << static_cast<unsigned long long int> (num_blocks) << '\n';
 #endif
 
 	for (blkid_t i = 0; i < num_blocks; ++i) {
@@ -407,7 +434,7 @@ int SingleClient::fetch_branch(blkid_t leaf_id)
 	for (int i = 0; i < num_blocks; ++i) {
 		if (i % BLOCKS_PER_BUCKET == 0)
 			std::cout << " |";
-		std::cout << ' ' << branch[i].get_block_id();
+		std::cout << ' ' << static_cast<unsigned long long int> (branch[i].get_block_id());
 	}
 	std::cout << '\n';
 	std::cout << "single_client: recv " << num_blocks << " blocks\n";
@@ -434,11 +461,11 @@ void SingleClient::traverse_branch(blkid_t requested_block_id, enum Operation op
 			blkid_t idx = find_intersection_bucket(position_map[requested_block_id], rand_leaf_id);
 			position_map[requested_block_id] = rand_leaf_id;
 #ifdef DEBUG
-			std::cout << "single_client: found leaf_id " << requested_block_id << ", randomized to leaf_id " << rand_leaf_id << ", bucket idx " << idx << '\n';
+			std::cout << "single_client: found leaf_id " << static_cast<unsigned long long int> (requested_block_id) << ", randomized to leaf_id " << static_cast<unsigned long long int> (rand_leaf_id) << ", bucket idx " << static_cast<unsigned long long int> (idx) << '\n';
 #endif
-			for (long j = (idx + 1) * BLOCKS_PER_BUCKET - 1; j >= 0; --j) {
-				if (branch[j].get_block_id() == 0) {
-					current_block.swap(branch[j]);
+			for (blkid_t j = (idx + 1) * BLOCKS_PER_BUCKET; j > 0; --j) {
+				if (branch[j-1].get_block_id() == 0) {
+					current_block.swap(branch[j-1]);
 					return;
 				}
 			}
@@ -447,18 +474,18 @@ void SingleClient::traverse_branch(blkid_t requested_block_id, enum Operation op
 
 			memcpy(stash[current_block.get_block_id()].data(), current_block.get_decrypted_data(), BYTES_PER_DATA);
 #ifdef DEBUG
-			std::cout << "single_client: wrote block " << current_block.get_block_id() << " to stash\n";
+			std::cout << "single_client: wrote block " << static_cast<unsigned long long int> (current_block.get_block_id()) << " to stash\n";
 #endif
 			current_block.set_block_id(0);
 			current_block.set_decrypted_random_data();
 			return;
 		}
 		blkid_t idx = find_intersection_bucket(position_map[requested_block_id], position_map[current_block.get_block_id()]);
-		long j;
+		blkid_t j;
 		for (j = idx * BLOCKS_PER_BUCKET; j < (idx + 1) * BLOCKS_PER_BUCKET; ++j) {
 			if (branch[j].get_block_id() == 0) {
 #ifdef DEBUG
-				std::cout << "single_client: swap block " << current_block.get_block_id() << " to branch idx " << j << '\n';
+				std::cout << "single_client: swap block " << static_cast<unsigned long long int> (current_block.get_block_id()) << " to branch idx " << static_cast<unsigned long long int> (j) << '\n';
 #endif
 				current_block.swap(branch[j]);
 				break;
@@ -470,7 +497,7 @@ void SingleClient::traverse_branch(blkid_t requested_block_id, enum Operation op
 
 			memcpy(stash[current_block.get_block_id()].data(), current_block.get_decrypted_data(), BYTES_PER_DATA);
 #ifdef DEBUG
-			std::cout << "single_client: wrote block " << current_block.get_block_id() << " to stash (not requested block)\n";
+			std::cout << "single_client: wrote block " << static_cast<unsigned long long int> (current_block.get_block_id()) << " to stash (not requested block)\n";
 #endif
 			current_block.set_block_id(0);
 			current_block.set_decrypted_random_data();
@@ -497,14 +524,14 @@ void SingleClient::traverse_branch(blkid_t requested_block_id, enum Operation op
 			blkid_t idx = find_intersection_bucket(position_map[requested_block_id], rand_leaf_id);
 			position_map[requested_block_id] = rand_leaf_id;
 #ifdef DEBUG
-			std::cout << "single_client: found leaf_id in stash" << requested_block_id << ", randomized to leaf_id " << rand_leaf_id << ", bucket idx " << idx << '\n';
+			std::cout << "single_client: found leaf_id in stash" << static_cast<unsigned long long int> (requested_block_id) << ", randomized to leaf_id " << static_cast<unsigned long long int> (rand_leaf_id) << ", bucket idx " << static_cast<unsigned long long int> (idx) << '\n';
 #endif
-			for (long j = (idx + 1) * BLOCKS_PER_BUCKET - 1; j >= 0; --j) {
-				if (branch[j].get_block_id() == 0) {
+			for (blkid_t j = (idx + 1) * BLOCKS_PER_BUCKET; j > 0; --j) {
+				if (branch[j-1].get_block_id() == 0) {
 #ifdef DEBUG
-					std::cout << "single_client: moved block " << current_block->first << " from stash to branch index " << j << '\n';
+					std::cout << "single_client: moved block " << current_block->first << " from stash to branch index " << j-1 << '\n';
 #endif
-					branch[j] = Block(current_block->first, current_block->second.data(), BYTES_PER_DATA);
+					branch[j-1] = Block(current_block->first, current_block->second.data(), BYTES_PER_DATA);
 					keys_to_remove.push_back(current_block->first);
 					//stash.erase(current_block);
 					break;
@@ -516,10 +543,10 @@ void SingleClient::traverse_branch(blkid_t requested_block_id, enum Operation op
 			return;
 		}
 		blkid_t idx = find_intersection_bucket(position_map[requested_block_id], position_map[current_block->first]);
-		for (long j = idx * BLOCKS_PER_BUCKET; j < (idx + 1) * BLOCKS_PER_BUCKET; ++j) {
+		for (blkid_t j = idx * BLOCKS_PER_BUCKET; j < (idx + 1) * BLOCKS_PER_BUCKET; ++j) {
 			if (branch[j].get_block_id() == 0) {
 #ifdef DEBUG
-				std::cout << "single_client: moved block " << current_block->first << " from stash to branch index " << j << '\n';
+				std::cout << "single_client: moved block " << static_cast<unsigned long long int> (current_block->first) << " from stash to branch index " << static_cast<unsigned long long int> (j) << '\n';
 #endif
 				branch[j] = Block(current_block->first, current_block->second.data(), BYTES_PER_DATA);
 				keys_to_remove.push_back(current_block->first);
@@ -537,11 +564,11 @@ void SingleClient::traverse_branch(blkid_t requested_block_id, enum Operation op
 	blkid_t rand_leaf_id = RAND();
 	blkid_t idx = find_intersection_bucket(position_map[requested_block_id], rand_leaf_id);
 	position_map[requested_block_id] = rand_leaf_id;
-	for (long j = (idx + 1) * BLOCKS_PER_BUCKET - 1; j >= 0; --j) {
-		if (branch[j].get_block_id() == 0) {
-			branch[j] = Block(requested_block_id, value_buffer->data(), BYTES_PER_DATA);
+	for (blkid_t j = (idx + 1) * BLOCKS_PER_BUCKET; j > 0; --j) {
+		if (branch[j-1].get_block_id() == 0) {
+			branch[j-1] = Block(requested_block_id, value_buffer->data(), BYTES_PER_DATA);
 #ifdef DEBUG
-			std::cout << "single_client: insert block " << requested_block_id << ", randomized to leaf_id " << rand_leaf_id << ", bucket idx " << idx << '\n';
+			std::cout << "single_client: insert block " << static_cast<unsigned long long int> (requested_block_id) << ", randomized to leaf_id " << static_cast<unsigned long long int> (rand_leaf_id) << ", bucket idx " << static_cast<unsigned long long int> (idx) << '\n';
 #endif
 			return;
 		}

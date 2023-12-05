@@ -30,6 +30,7 @@ public:
 	~SingleClient();
 
 	int initialize(const std::string &server_ip = "127.0.0.1", const int port = 8080, int (*custom_init)() = nullptr);
+	int shutdown();
 	int put(const std::string &key_name, const std::array<uint8_t, BYTES_PER_DATA> &value);
 	int get(const std::string &key_name, std::array<uint8_t, BYTES_PER_DATA> &value);
 	int clear(const std::string &key_name);
