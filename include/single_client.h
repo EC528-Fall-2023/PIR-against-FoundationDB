@@ -39,7 +39,7 @@ public:
 private:
 	int fetch_branch(blkid_t leaf_id);
 	void traverse_branch(blkid_t requested_block_id, enum Operation op, std::array<uint8_t, BYTES_PER_DATA> *value);
-	uint16_t find_intersection_bucket(blkid_t leaf_id_1, blkid_t leaf_id_2);
+	blkid_t find_intersection_bucket(blkid_t leaf_id_1, blkid_t leaf_id_2);
 	void swap_blocks(Block &block1, Block &block2);
 	int send_branch();
 	void store_state();

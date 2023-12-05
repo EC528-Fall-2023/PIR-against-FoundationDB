@@ -3,12 +3,24 @@ CFLAGS = -std=c++17 -Wall -Wextra -Werror
 CPPFLAGS := -Iinclude
 LDLIBS := -lm -pthread -lrt -lssl -lcrypto
 
-ifeq ($(DEBUG), 1)
+ifdef DEBUG
 	CFLAGS += -g3 -DDEBUG
 endif
 
-ifeq ($(SEED), 1)
+ifdef SEED
 	CFLAGS += -DSEEDED_RANDOM
+endif
+
+ifdef BYTES
+	CFLAGS += -DBLOCK_SIZE=$(BYTES)
+endif
+
+ifdef BLOCKS
+	CFLAGS += -DBLOCKS_PER_BUCKET=$(BLOCKS)
+endif
+
+ifdef LEVELS
+	CFLAGS += -DTREE_LEVELS=$(LEVELS)
 endif
 
 SRC_DIR := src
