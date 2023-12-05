@@ -1,6 +1,7 @@
 import random
 import math
 import pandas as pd
+from Mp import df_matrix5
 
 def get_cipher_values(file_path):
     custom_delimiter = 'test '
@@ -21,7 +22,8 @@ def get_cipher_values(file_path):
     keys.pop(0)
     return(keys)
 
-def get_unique_keywords(file_path):
+def get_unique_keywords():
+    file_path = 'unique_keywords.csv'
     data = []
     with open(file_path, 'r') as file:
         for line in file:
@@ -62,6 +64,8 @@ def anneal(initState, D, Mp, Mc, initTemperature, coolingRate, rejectThreshold):
         del nextState[cipher_var]
         nextState[cipher_var] = next_plain
 
+        print(currentState)
+        print(nextState)
         if any(next_plain == v for v in initState.values()):
             z = [k for k, v in initState.items() if v == next_plain][0]
             del nextState[z]
@@ -69,15 +73,16 @@ def anneal(initState, D, Mp, Mc, initTemperature, coolingRate, rejectThreshold):
 
         for i in Mc:
             for j in Mc[i]:
-                current_plain_key = currentState.get(i)
-                next_plain_key = nextState.get(i)
-                current_cipher_key = Mp[current_plain_key][i]
-                next_cipher_key = Mp[next_plain_key][i]
-                currentCost += (Mc[i][j] - current_cipher_key)
-                nextCost += (Mc[i][j] - next_cipher_key)
+                k = currentState.get(i)
+                l = currentState.get(j)
+                k_prime = nextState.get(i)
+                l_prime = nextState.get(j)
+                currentCost += (Mc[i][j] - Mp[k][l])**2
+                nextCost += (Mc[i][j] - Mp[k_prime][l_prime])**2
 
         E = nextCost - currentCost
-
+        print("nextCost:", nextCost)
+        print("currentCost:", currentCost)
         if E < 0 or random.uniform(0, 1) < math.exp(-E / currT):
             currentState = nextState.copy()
             succReject = 0
@@ -85,25 +90,20 @@ def anneal(initState, D, Mp, Mc, initTemperature, coolingRate, rejectThreshold):
             succReject += 1
 
         currT *= coolingRate
-
     return currentState
 
 
 # Example Usage
-# final_V = get_cipher_values('./bin/data.csv')
-# final_D = get_unique_keywords('./bin/unique_keywords.csv')
-V = ['var1', 'var2']  # List of cipher variables
-D = ['plain1', 'plain2', 'plain3']  # Domain list
-K = {'var1': 'plain2'}  # Known assignments
-Mp = {'plain1': {'var1': 0.5, 'var2': 0.3},  # Pair similarity matrices
-      'plain2': {'var1': 0.2, 'var2': 0.1},
-      'plain3': {'var1': 0.1, 'var2': 0.4}}
-Mc = {'var1': {'plain1': 0.5, 'plain2': 0.2, 'plain3': 0.1},  # Pair similarity matrices
-      'var2': {'plain1': 0.3, 'plain2': 0.1, 'plain3': 0.4}}
+D = get_unique_keywords()
+V = ['cipher_var1', 'cipher_var2', 'cipher_var3']  # List of cipher variables
+K = {}  # Known assignments
+Mp = df_matrix5
+Mc = {'cipher_var1': {'cipher_var1': 0, 'cipher_var2': 0.2, 'cipher_var3': 0.2},  # Pair similarity matrices
+      'cipher_var2': {'cipher_var1': 0.3, 'cipher_var2': 0, 'cipher_var3': 0.5},
+      'cipher_var3':{'cipher_var1':0.4, 'cipher_var2': 0.6, 'cipher_var3': 0}}
 
 initTemperature = 1000
 coolingRate = 0.99
-rejectThreshold = 1000
-
+rejectThreshold = 10
 result = optimizer(V, D, K, Mp, Mc)
 print(result)
