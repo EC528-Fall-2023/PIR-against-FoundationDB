@@ -23,18 +23,28 @@
 #endif
 
 /* DO NOT MODIFY */
+#if BLOCK_SIZE % 16 != 0
+	#error "BYTES must be a multiple of 16"
+#elif BLOCK_SIZE > 100000
+	#error "BYTES cannot exceed FoundationDB maximum value capacity of 100,000"
+#endif
+
 #if TREE_LEVELS <= 1
-	#error "TREE_LEVELS must be > 1"
-#elif TREE_LEVELS <= 8
+	#error "LEVELS must be > 1"
+#elif ((1ull << TREE_LEVELS) - 1) * BLOCKS_PER_BUCKET < 0x0000000000000100
 	#define blkid_t uint8_t
-#elif TREE_LEVELS <= 16
+#elif ((1ull << TREE_LEVELS) - 1) * BLOCKS_PER_BUCKET < 0x0000000000010000
 	#define blkid_t uint16_t
-#elif TREE_LEVELS <= 32
+#elif ((1ull << TREE_LEVELS) - 1) * BLOCKS_PER_BUCKET < 0x0000000100000000
 	#define blkid_t uint32_t
-#elif TREE_LEVELS <= 64
+#elif ((1ull << TREE_LEVELS) - 1) * BLOCKS_PER_BUCKET <= 0xffffffffffffffff
 	#define blkid_t uint64_t
 #else
-	#error "TREE_LEVELS must be <= 64"
+	#error "there must be < 2^64 blocks in the tree"
+#endif
+
+#if BLOCK_SIZE * BLOCKS_PER_BUCKET * TREE_LEVELS > 9000000
+	#error "Transactions cannot exceed FoundationDB maximum limit of 10,000,000"
 #endif
 
 #define BYTES_PER_DATA (BLOCK_SIZE - sizeof(blkid_t))

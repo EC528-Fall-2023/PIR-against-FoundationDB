@@ -134,14 +134,14 @@ int main()
 			}
 
 			// send number of blocks to send
-			blkid_t num_blocks = branch_indexes.size() * BLOCKS_PER_BUCKET;
+			uint64_t num_blocks = branch_indexes.size() * BLOCKS_PER_BUCKET;
 			if (send(client_socket, &num_blocks, sizeof(num_blocks), 0) != sizeof(num_blocks)) {
 				ERROR("send");
 				close_connection();
 				continue;
 			}
 #ifdef DEBUG
-			std::cout << "server: sent num_blocks = " << static_cast<unsigned long long int> (num_blocks) << '\n';
+			std::cout << "server: sent num_blocks = " << num_blocks << '\n';
 #endif
 
 			// retrieve vector<Block> from fdb
@@ -330,7 +330,7 @@ inline int setup_fdb()
 
 			fdb_transaction_set(tr, (const uint8_t *) temp, sizeof(temp), bucket, BLOCK_SIZE * BLOCKS_PER_BUCKET);
 
-			if (tree_index % 3000 == 0) {
+			if (tree_index % (9000000 / (BLOCK_SIZE * BLOCKS_PER_BUCKET)) == 0) {
 				status = fdb_transaction_commit(tr);
 				if ((fdb_future_block_until_ready(status)) != 0) {
 					ERROR("fdb_future_block_until_ready");
@@ -364,6 +364,7 @@ inline int setup_fdb()
 		int error = fdb_future_get_error(status);
 		if (error != 0) {
 			ERROR("fdb_future_get_error");
+			ERROR(std::to_string(error).c_str());
 			return -1;
 		}
 		fdb_future_destroy(status);
@@ -394,6 +395,10 @@ inline int setup_fdb()
 		tr = NULL;
 	}
 	fdb_is_initialized = 1;
+	if (send(client_socket, &fdb_is_initialized, sizeof(fdb_is_initialized), 0) != sizeof(fdb_is_initialized)) {
+		ERROR("send");
+		return -1;
+	}
 	return 0;
 }
 

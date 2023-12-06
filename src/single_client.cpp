@@ -140,6 +140,14 @@ int SingleClient::initialize(const std::string &server_ip, const int port, int (
 			ERROR("send");
 			return -1;
 		}
+		if (recv(socket_fd, &fdb_is_initialized, sizeof(fdb_is_initialized), 0) != sizeof(fdb_is_initialized)) {
+			ERROR("recv");
+			return -1;
+		}
+		if (!fdb_is_initialized) {
+			ERROR("fdb is not initialized");
+			return -1;
+		}
 	} else if (custom_init() != 0){
 		ERROR("custom_init");
 		return -1;
@@ -408,17 +416,17 @@ int SingleClient::fetch_branch(blkid_t leaf_id)
 	std::cout << "single_client: sent leaf_id = " << static_cast<unsigned long long int> (leaf_id) << '\n';
 #endif
 
-	blkid_t num_blocks;
+	uint64_t num_blocks;
 	if (recv(socket_fd, &num_blocks, sizeof(num_blocks), 0) != sizeof(num_blocks)) {
 		ERROR("recv");
 		return -1;
 	}
 	branch.resize(num_blocks);
 #ifdef DEBUG
-	std::cout << "single_client: num_blocks = " << static_cast<unsigned long long int> (num_blocks) << '\n';
+	std::cout << "single_client: num_blocks = " << num_blocks << '\n';
 #endif
 
-	for (blkid_t i = 0; i < num_blocks; ++i) {
+	for (uint64_t i = 0; i < num_blocks; ++i) {
 		if (recv(socket_fd, branch[i].get_encrypted_data(), BLOCK_SIZE, MSG_WAITALL) != BLOCK_SIZE) {
 			ERROR("recv");
 			return -1;
@@ -431,7 +439,7 @@ int SingleClient::fetch_branch(blkid_t leaf_id)
 
 #ifdef DEBUG
 	std::cout << "single_client: leaf_ids =";
-	for (int i = 0; i < num_blocks; ++i) {
+	for (uint64_t i = 0; i < num_blocks; ++i) {
 		if (i % BLOCKS_PER_BUCKET == 0)
 			std::cout << " |";
 		std::cout << ' ' << static_cast<unsigned long long int> (branch[i].get_block_id());
