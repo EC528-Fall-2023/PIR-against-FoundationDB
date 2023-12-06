@@ -12,6 +12,49 @@
 - Orran Krieger
 - Ata Turk
 
+## 0. Install Instructions
+Make sure that at FoundationDB (7.1.35) is installed. If you are using a RHEL/CentOS based distro, you can use the following commands to install FoundationDB.
+
+	wget https://github.com/apple/foundationdb/releases/download/7.1.35/foundationdb-clients-7.1.35-1.el7.x86_64.rpm
+	wget https://github.com/apple/foundationdb/releases/download/7.1.35/foundationdb-server-7.1.35-1.el7.x86_64.rpm
+	sudo dnf localinstall -y foundationdb-clients-7.1.35-1.el7.x86_64.rpm foundationdb-server-7.1.35-1.el7.x86_64.rpm
+	rm foundationdb-clients-7.1.35-1.el7.x86_64.rpm foundationdb-server-7.1.35-1.el7.x86_64.rpm
+
+To make the Path ORAM server and single client binaries, type 
+
+	make single_client
+
+If you want to use the multiclient mode, type
+
+	make multiclient
+
+You can also explicitly specify the Path ORAM tree parameters. These parameters cannot be changed after defined.
+
+	make SEED=1 DEBUG=1 BYTES=1024 BLOCKS=1 LEVELS=8
+
+SEED=1 sets all random generators to seeded random. This is meant to be used for benchmarking.
+
+DEBUG=1 enables print statements and errors to be shown to verify that the algorithm works.
+
+BYTES=1024 (default) sets each block (block\_id + data) to be 1024 bytes big. It must be a multiple of 16.
+
+BLOCKS=1 (default) sets the amount of blocks per bucket to be 1.
+
+LEVELS=8 (default) sets how many levels the Path ORAM tree contains
+
+Your binaries will be located in `/path/to/repo/bin`
+
+Before running, make sure that you have a file called `.oram_enc` in your current working directory so that encryption works. In this file, you should have your 32 byte encryption key on the first line, and your 16 byte encryption initialization vector.
+
+If you would like to start over from before making your binaries, type:
+
+	make clean
+
+This command will reset FoundationDB to have nothing in it, and remove everything in the `bin` and `obj` folders.
+
+
+Happy hacking!
+
 ## 1. Vision and Goals Of The Project
 Our vision is to see the Path ORAM algorithm fully implemented in a client library and a server process between the user application and the FoundationDB server. The entire system should be implemented such that the client exposes a simplified interface of the FoundationDB API to the user, while adversaries cannot infer much information in a compromised database. Along the way, we will create attacks against a database to understand why sole data encryption is not enough to protect information leaking out to adversaries, and why PIR is needed for increased security.
 
@@ -60,7 +103,7 @@ These principal user roles, Sarah and Alex, encompass specific characteristics a
 
 #### Walkthrough Explanation of the above Architectural Structure:
 
-1. In our Architecture the user starts with the Application where they have access to the client library and the ability to access FoundationDB
+1. In our Architecture the user starts with the Application where they have access to the client library but not the ability to access FoundationDB directly
    - FoundationDB is a key value database
    - A request id is generated 
    - Some of the key functions in the Client library include:
@@ -70,37 +113,36 @@ These principal user roles, Sarah and Alex, encompass specific characteristics a
      - read_range() : reads a range of blocks specifies by a beginning and ending key by returning a vector of blocks representing the data
      - clear_range() : clears a range of blocks specific by a beginning and ending key 
 2. From there the client will send the operation request to the Master Client, where the state of the position map and stash are being saved locally, and the clients can remain stateless
-   - Position Map is a data structure that maintains the mapping between the locks of data the client wants to store/retrieve and their actual position in the server storage
-     - each block of data is identified by a block ID and is mapped to a leaf in a binary tree structure, simulated by an array in the server
-     - everytime a block is accessed, its position in the map is randomized again to maintain obliviousness
+   - Position Map is a data structure that maintains the mapping between the blocks of data the client wants to store/retrieve and their actual leaf position (1:2^(L-1)) in the server storage
+     - each block of data is identified by a block ID and is mapped to a leaf node in a binary tree structure, simulated by an array in the server
+     - everytime a block is accessed, its position in the path is randomized by finding the intersection bucket between the original path and the path to the randomly generated leaf id to maintain obliviousness
    - Stash is a local storage area where the blocks are temporarily held when they are fetched from the server but cannot be written back immediately
      - A reason why the block cant be written immediately is all the blocks being full, and would stay in the stash until the next write operation
 3. The Master client will receive the request id and will randomly generate a leaf id 
 4. The Master Client will then send the request id and leaf id, sent over the network
-5. The PathORAM Server then receives the two IDs, and uses the leaf id to fetch a branch, a vector of data blocks, that is associated between he lead id and the specific leaf node 
-6. The PathORAM Server fetches the branch from FoundationDB
-7. FoundationDB sends the blocks to the server
-8. The PathORAM Server then sends the master client the leaf id it was received, the blocks of data, and the number of blocks being sent
-9. The Master Client will send do the shuffling among the blocks received, update the position map and stash, and carryout the requested operation and send the data to the client 
-10. The Master Client will then send the shuffled branch back to the PathORAM server 
-11. The PathORAM Server will receive the blocks and send them to FoundationDB to update the database
-12. Once completed, the PathORAM Server will send the request id back to the master client
-13. If the master client receives the request id, then it will send it back to the client and print its successful 
+5. The PathORAM Server then receives the two IDs, and uses the leaf id to fetch a branch, a vector of data blocks that contains all of the blocks from the root bucket to the leaf bucket with the associated leaf id, from FoundationDB.
+6. FoundationDB sends the blocks to the Path ORAM server
+7. The PathORAM Server then sends the master client the number of blocks being sent and the blocks of data.
+8. The Master Client will then do the shuffling among the blocks received, updating the branch, position map, and stash, and carryout the requested operation and send the data to the client if it's a put request.
+9. The Master Client will then send the updated branch back to the PathORAM server 
+10. The PathORAM Server will receive the blocks and send them to FoundationDB to update the database
+11. Once completed, the PathORAM Server will send the request id back to the master client
+12. If the master client receives the request id, then it will send it back to the client and print its successful 
+13. On a successful operation, the master client will update its state, saving its key-to-block\_id map, position map, and the stash.
 
 #### In-depth explanation of each component within PIR:
 Path ORAM Server (Server):
 - The Path ORAM Server is the component responsible for implementing one part of the Path ORAM algorithm.
-- It stores a binary tree structure full of encrypted data where each node (bucket) contains data blocks, which contains an id.
-- It listens for data requests in a tuple: operation type, leaf node id (leftmost id is 1, rightmost is highest), and the actual data (if write operation). 
-- It returns all of the data from all of the nodes between the root and the leaf with the requested id (the tree branch) back to the client.
+- It stores a binary tree structure full of encrypted data where each node (bucket) contains data blocks, which contains it's identifying block\_id.
+- It listens for data requests by receiving the requested leaf bucket id.
+- It returns all of the blocks from all of the nodes between the root and the leaf with the requested id (the tree branch) back to the client.
 - Then it receives the shuffled branch to update the tree.
 - This continuous random shuffling ensures access patterns are obscured, enhancing data privacy.
 - After each branch update, the Path ORAM server updates the key-value pairs in the FoundationDB server via the C API.
 
 Master PathORAM Client (Application):
-- The Path ORAM Client is a library for an application that consists of functions similar to the FoundationDB Java API with the tradeoff in increased security for decreased performance.
-- It stores a map that maps the leaf node id to the actual leaf node.
-- It sends the request tuple to the Path ORAM server, retrieves a branch, performs the shuffling, and sends it back to the server.
+- The Path ORAM Client is a library for an application that consists of functions similar to the FoundationDB C API with the tradeoff in increased security for decreased performance.
+- It stores a map that maps key names to block ids, and another map that maps the block id to its current leaf id.
 - The introduction of a Master client enables multiple clients since they can retrieve the most recent position map and stash of the system
   
 FoundationDB:
@@ -129,7 +171,7 @@ The design decisions made during the global architecture design have significant
 - Reason: A firewall can monitor and control incoming and outgoing network traffic between the PathaORAM client and PathORAM server. It will also log and monitor the traffic passing to help detect suspicious activity and potential attacks
 
 #### Encryption Process Placement:
-- Implication: Encryption is necessary in our process to ensure the private information we are trying to his is not kept in plain text, and for better design, we decided to put the encryption and decryption process in the block class
+- Implication: Encryption is necessary in our process to ensure the private information we are trying to hide is not kept in plain text, and for better design, we decided to put the encryption and decryption process in the block class
 - Reason: It encapsulates all the functionalities that are happening on the block object within itself and makes it easier to pass data over the network since it facilitates getting the block id and data regardless of encryption
 
 ### Helpful Analogy: 
@@ -141,8 +183,8 @@ When you want to read the book, you go to the library and request the pages of t
 
 ## 5. Acceptance criteria
 *Minimum Acceptance criteria:*
-- Implementing all parts of a path ORAM, both client and server, to an application and the binded FoundationalDB Client
-- Implementing the server side of PathOram in between the FoundationalDB client and server to compare its performance versus our original solution
+- Implement Path ORAM single\_client and server.
+- Compare performance with and without the Path ORAM algorithm
 - Deep understanding of questions such as: How to optimize a large position map on the client? Does the tree in the server have to be balanced? What is the right size of the cache?
 
 *Stretch Goals:*
@@ -217,8 +259,10 @@ In the third sprint, we are able to successfully use an open-source PathORAM alg
 #### [Slides for sprint 4](https://docs.google.com/presentation/d/1pp84PhRwiSyWghHc9lZhWW2VgnhMV6PaDHIAit9rQl0/edit?usp=sharing)
 In the fourth sprint we implemented client library functions, started a base of encryption, mapped out an attack, added error handling and state saving, have a proof of concept for multiple clients, and a base for benchmarking
 ### [Sprint 5](https://youtu.be/9e5QJJdv7Sg)
-#### [Slides for sprint 5](https://docs.google.com/presentation/d/1pp84PhRwiSyWghHc9lZhWW2VgnhMV6PaDHIAit9rQl0/edit?usp=sharing)
+#### [Slides for sprint 5](https://docs.google.com/presentation/d/1jqgMLwRAsqoDXpN-beFdYwLJnAGsZi76gfrrxxyTGLg/edit?usp=sharing)
 In the fifth sprint, we accomplished working multi-client architecture in C++. We performed multiple benchmarking tests including: Performance based on data sizes, Performance based on block sizes, and Performance differences between Java vs C++. Also, we incorporated the AES-256 encryption standard through the utilization of the OpenSSL library. We also created security tests for our system, such as parts of the inference attack such as the keyword matrix, and types of data leaks. 
+
+#### [Final Presentation Slides](https://docs.google.com/presentation/d/1iaZ8GhRR3_XuDEBKmpN9eMPczE7oB9kNEpvQEyQxOuU/edit?usp=sharing)
 
 ## 9. References
 [1] Stefanov, Emil & van Dijk, Marten & Shi, Elaine & Fletcher, Christopher & Ren, Ling & Yu, Xiangyao & Devadas, Sahana. (2012). Path ORAM: an extremely simple oblivious RAM protocol. Proceedings of the ACM Conference on Computer and Communications Security. 10.1145/2508859.2516660. [Orginal Paper](https://people.csail.mit.edu/devadas/pubs/PathORam.pdf)
