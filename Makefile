@@ -32,40 +32,33 @@ SRC := $(wildcard $(SRC_DIR)/*.cpp)
 OBJ := $(patsubst $(SRC_DIR)/%.cpp,$(OBJ_DIR)/%.o,$(SRC))
 INC := $(wildcard $(INC_DIR)/*.h)
 
-.PHONY: all server single_client multiclient bm clean
+.PHONY: all server single_client multiclient bm startup fdb clear_fdb clean
 
-all: single_client multiclient bm
+all: single_client multiclient
 
-single_client: server app_single_client
+single_client: app_single_client
 
-multiclient: server app_multiclient master_client
+multiclient: app_multiclient master_client
 
-bm: init
+bm: server startup fdb clear_fdb
 
 server: $(OBJ_DIR)/server.o $(OBJ_DIR)/block.o | $(BIN_DIR)
 	$(CC) $^ /lib64/libfdb_c.so $(LDLIBS) -o $(BIN_DIR)/$@
 	
-app_single_client: $(OBJ_DIR)/app_single_client.o $(OBJ_DIR)/single_client.o $(OBJ_DIR)/block.o | $(BIN_DIR)
+app_single_client: $(OBJ_DIR)/app_single_client.o $(OBJ_DIR)/single_client.o $(OBJ_DIR)/block.o | $(BIN_DIR) server
 	$(CC) $^ $(LDLIBS) -o $(BIN_DIR)/$@
 
-app_multiclient: $(OBJ_DIR)/app_multiclient.o $(OBJ_DIR)/multiclient.o $(OBJ_DIR)/block.o | $(BIN_DIR)
+app_multiclient: $(OBJ_DIR)/app_multiclient.o $(OBJ_DIR)/multiclient.o $(OBJ_DIR)/block.o | $(BIN_DIR) master_client server
 	$(CC) $^ $(LDLIBS) -o $(BIN_DIR)/$@
 	
-master_client: $(OBJ_DIR)/master_client.o $(OBJ_DIR)/single_client.o $(OBJ_DIR)/block.o | $(BIN_DIR)
+master_client: $(OBJ_DIR)/master_client.o $(OBJ_DIR)/single_client.o $(OBJ_DIR)/block.o | $(BIN_DIR) server
 	$(CC) $^ $(LDLIBS) -o $(BIN_DIR)/$@
 
-init: test_fdb server clear_fdb | $(BIN_DIR)
-	echo -e 'WORKDIR=$$(dirname "$$0")' > $(BIN_DIR)/$@.sh
-	echo -e 'rm $$WORKDIR/.oram_state' >> $(BIN_DIR)/$@.sh
-	echo -e '$$WORKDIR/clear_fdb' >> $(BIN_DIR)/$@.sh
-	echo -e '$$WORKDIR/server &' >> $(BIN_DIR)/$@.sh
-	echo -e 'PID=$$\x21' >> $(BIN_DIR)/$@.sh
-	echo -e '$$WORKDIR/test_fdb' >> $(BIN_DIR)/$@.sh
-	echo -e 'kill $$PID' >> $(BIN_DIR)/$@.sh
-	chmod +x $(BIN_DIR)/$@.sh
+startup: $(OBJ_DIR)/startup.o $(OBJ_DIR)/single_client.o $(OBJ_DIR)/block.o | $(BIN_DIR) server clear_fdb
+	$(CC) $^ $(LDLIBS) -o $(BIN_DIR)/$@
 
-test_fdb: $(OBJ_DIR)/test_fdb.o $(OBJ_DIR)/single_client.o $(OBJ_DIR)/block.o | $(BIN_DIR)
-	$(CC) $^ /lib64/libfdb_c.so $(LDLIBS) -o $(BIN_DIR)/$@
+fdb: $(OBJ_DIR)/fdb.o $(OBJ_DIR)/single_client.o $(OBJ_DIR)/block.o | $(BIN_DIR) server
+	$(CC) $^ $(LDLIBS) -o $(BIN_DIR)/$@
 
 clear_fdb: $(OBJ_DIR)/clear_fdb.o | $(BIN_DIR)
 	$(CC) $^ /lib64/libfdb_c.so $(LDLIBS) -o $(BIN_DIR)/$@
@@ -83,7 +76,7 @@ $(OBJ_DIR) $(BIN_DIR):
 	mkdir $@
 
 clean: clear_fdb
-	ps aux | grep server
-	ps aux | grep master_client
+	-sudo pkill -f $(PWD)/bin/server
+	-sudo pkill -f $(PWD)/bin/master_client
 	$(BIN_DIR)/clear_fdb
-	rm $(OBJ_DIR)/*.o $(BIN_DIR)/*
+	rm -rf $(OBJ_DIR)/* $(BIN_DIR)/*

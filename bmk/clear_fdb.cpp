@@ -43,10 +43,13 @@ int main()
 		perror("fdb_database_create_transaction");
 		return -1;
 	}
-
+/*
 	const uint8_t begin_key = 0x00;
 	const uint8_t end_key = 0xff;
 	fdb_transaction_clear_range(tr, &begin_key, 1, &end_key, 1);
+*/
+	uint8_t key = 1;
+	fdb_transaction_atomic_op(tr, &key, sizeof(key), &key, sizeof(key), FDB_MUTATION_TYPE_COMPARE_AND_CLEAR);
 
 	status = fdb_transaction_commit(tr);
 	if ((fdb_future_block_until_ready(status)) != 0) {
