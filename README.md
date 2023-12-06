@@ -42,15 +42,16 @@ These principal user roles, Sarah and Alex, encompass specific characteristics a
 - Path ORAM Integration: The primary scope of the project is to implement the Path ORAM algorithm as an access method to FoundationDB. This integration will involve both client and server components that act as a front end to FoundationDB.
 - Client Library: The client library functions exposed to the user's application should look similar to FoundationDB's "put", "get", "range\_read", and "range\_clear" C API functions. In the background, the library will have to send and receive data to and from the Path ORAM server, and shuffle it to send it back to the server.
 - Server Process: The Path ORAM server will listen for incoming requests, store all data in the tree structure, and send the data back to the FoundationDB server via the FoundationDB C API.
-- Attack Replication: Replicate a real-world attack that leverages access patterns. This involves simulating an adversarial scenario to analyze and understand the vulnerabilities that might exist within the system when it comes to privacy and access pattern analysis.
-- Overhead and Performance Analysis: Measure and analyze the overhead introduced by the use of the Path ORAM algorithm for various operations within the FoundationDB system. Explore potential strategies to mitigate this overhead.
 - MultiClient Adoption: In the original PathORAM there is only one client that is reading or writing to a database, but with a new architectural system, multiple clients can be enabled to and retrieve the necessary information to have the most recent changes to the data
+- Overhead and Performance Analysis: Measure and analyze the overhead introduced by the use of the Path ORAM algorithm for various operations within the FoundationDB system. Explore potential strategies to mitigate this overhead.
+- Attack Replication: Replicate a real-world attack that leverages access patterns. This involves simulating an adversarial scenario to analyze and understand the vulnerabilities that might exist within the system when it comes to privacy and access pattern analysis.
 
 ### Out-of-Scope:
 
 - Full Application Development: The project's scope is limited to integrating the Path ORAM algorithm with FoundationDB and replicating an attack scenario. It does not include the development of full-fledged applications or services that utilize this integration.
 - Advanced Attacks: While the project replicates an attack scenario, it does not encompass advanced attack techniques beyond the scope of the defined attack replication.
 - Production-Ready Security: While security considerations are important, the project's primary focus is on integration and analysis. It does not guarantee the development of a production-ready, fully secure system.
+
 
 ## 4. Solution Concept
 
@@ -140,12 +141,12 @@ When you want to read the book, you go to the library and request the pages of t
 
 ## 5. Acceptance criteria
 *Minimum Acceptance criteria:*
-- Implementing all parts of a path ORAM, both client and server, to an application and the binded FoundationalDB Client 
-- Run a sophisticated attack on a Database to test our implementations 
+- Implementing all parts of a path ORAM, both client and server, to an application and the binded FoundationalDB Client
+- Implementing the server side of PathOram in between the FoundationalDB client and server to compare its performance versus our original solution
 - Deep understanding of questions such as: How to optimize a large position map on the client? Does the tree in the server have to be balanced? What is the right size of the cache?
 
 *Stretch Goals:*
-- Implementing the server side of PathOram in between the FoundationalDB client and server to compare its performance versus our original solution
+- Run a sophisticated attack on a Database to test our implementations 
 - Being able to run PIR against FoundationDB on Massachuttes Open Cloud (MOC)
 
 ## 6. Inference Attack Model
@@ -158,11 +159,17 @@ To test that our PathORAM has been implemented correctly, we will be creating a 
 
 #### Explanation of the diagram above
 1. Receives an array of queries from client to server (The attack has access to all communications with the server)
-2. Runs a Porter Stemming Algorithm to match keywords with queries
+2. Runs a Porter Stemming Algorithm along with Anneal and Optimizer functions to match keywords with queries
 3. Requests encrypted files
 4. Receives the documents that were able to be decrypted
 
-Within the attack architecture we will store the queries from the requests to FoundationDB along with matrix M. Matrix M is what allows us to reasonably guess the keyword pairs to the queries. To create this matrix we first will find a large publicly available dataset with all the possible keywords we would expect to find in our targeted attack. Matrix M is created to contain all of these keywords along with the expected probability they will appear.
+Within the attack architecture we will store the queries from the requests to FoundationDB along with matrix Mp and Mc. Matrix Mp and Mc contains the joint frequency distribution of plain and cipher keywords, these matrices allow us to reasonably guess the keyword pairs to the queries. To create these matrix we first will find a large publicly available dataset with all the possible keywords we would expect to find in our targeted attack. 
+
+#### Anneal and Optimizer Functions:
+- This algorithm optimizes the keyword assignments to reveal queries by utilizing Simulated Annealing.
+- It iteratively modifies the keyword assignments based on the pair similarity matrices and known assignments to minimize the difference between joint frequency distributions of plain and cipher keyword pairs (Mp and Mc).
+- The process involves accepting or rejecting new states probabilistically, considering the energy difference and current temperature.
+- The loop continues until the temperature reaches zero or a threshold of unsuccessful rejections (rejectThreshold) is met.
 
 
 ## 7. Release Planning
@@ -214,5 +221,6 @@ In the fourth sprint we implemented client library functions, started a base of 
 In the fifth sprint, we accomplished working multi-client architecture in C++. We performed multiple benchmarking tests including: Performance based on data sizes, Performance based on block sizes, and Performance differences between Java vs C++. Also, we incorporated the AES-256 encryption standard through the utilization of the OpenSSL library. We also created security tests for our system, such as parts of the inference attack such as the keyword matrix, and types of data leaks. 
 
 ## 9. References
-- Stefanov, Emil & van Dijk, Marten & Shi, Elaine & Fletcher, Christopher & Ren, Ling & Yu, Xiangyao & Devadas, Sahana. (2012). Path ORAM: an extremely simple oblivious RAM protocol. Proceedings of the ACM Conference on Computer and Communications Security. 10.1145/2508859.2516660. [Orginal Paper](https://people.csail.mit.edu/devadas/pubs/PathORam.pdf)
-- Mohammad Saiful Islam, Mehmet Kuzu, Murat Kantarcioglu Jonsson School of Engineering and Computer Science The University of Texas at Dallas. Access Pattern disclosure on Searchable Encryption: Ramification, Attack and Mitigation
+[1] Stefanov, Emil & van Dijk, Marten & Shi, Elaine & Fletcher, Christopher & Ren, Ling & Yu, Xiangyao & Devadas, Sahana. (2012). Path ORAM: an extremely simple oblivious RAM protocol. Proceedings of the ACM Conference on Computer and Communications Security. 10.1145/2508859.2516660. [Orginal Paper](https://people.csail.mit.edu/devadas/pubs/PathORam.pdf)
+
+[2] Mohammad Saiful Islam, Mehmet Kuzu, Murat Kantarcioglu Jonsson School of Engineering and Computer Science The University of Texas at Dallas. Access Pattern disclosure on Searchable Encryption: Ramification, Attack and Mitigation
