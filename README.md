@@ -242,8 +242,7 @@ Within the attack architecture we will store the queries from the requests to Fo
 - Made data leak test; from trying to find sensitive information over the network or within the server to highlight the security of our system
 6. Performance Benchmarking & Attack Simulation [12/6/23]
 - Analyze the results of the attack simulation to identify vulnerabilities and potential security improvements.
-- Error Handling 
-- We refine our performance test to meet a more conclusive result and ensure the comparison of similar environments/systems
+- We refine our performance test to meet a more conclusive result and ensure the comparison of similar environments/systems 
 
 ## 8. Videos & Slides
 ### [Sprint 1](https://drive.google.com/file/d/1mzK61GUkCX3TyAa_z3-Qk02gBIUXeQ1o/view?usp=sharing)
@@ -257,12 +256,13 @@ In the second sprint are in the process of setting up everyones enviornment, deb
 In the third sprint, we are able to successfully use an open-source PathORAM algorithm and enable its connection to FoundationDB, gaining a better understanding on the attack referenced in the paper, pivoting from our original direction in the project by switching to Java and potentially a new environment.
 ### [Sprint 4](https://youtu.be/k0n5dColuRE)
 #### [Slides for sprint 4](https://docs.google.com/presentation/d/1pp84PhRwiSyWghHc9lZhWW2VgnhMV6PaDHIAit9rQl0/edit?usp=sharing)
-In the fourth sprint we implemented client library functions, started a base of encryption, mapped out an attack, added error handling and state saving, have a proof of concept for multiple clients, and a base for benchmarking
+In the fourth sprint, we implemented client library functions, started a base of encryption, mapped out an attack, added error handling and state saving, have a proof of concept for multiple clients, and a base for benchmarking
 ### [Sprint 5](https://youtu.be/9e5QJJdv7Sg)
 #### [Slides for sprint 5](https://docs.google.com/presentation/d/1jqgMLwRAsqoDXpN-beFdYwLJnAGsZi76gfrrxxyTGLg/edit?usp=sharing)
-In the fifth sprint, we accomplished working multi-client architecture in C++. We performed multiple benchmarking tests including: Performance based on data sizes, Performance based on block sizes, and Performance differences between Java vs C++. Also, we incorporated the AES-256 encryption standard through the utilization of the OpenSSL library. We also created security tests for our system, such as parts of the inference attack such as the keyword matrix, and types of data leaks. 
+In our fifth sprint, we successfully implemented a multi-client architecture in C++ and conducted extensive benchmarking tests. These tests evaluated performance variations based on data and block sizes, as well as differences between Java and C++ implementations. Additionally, we integrated AES-256 encryption using the OpenSSL library. To enhance security, we developed tests targeting potential system vulnerabilities, including parts of the inference attack, like the keyword matrix, and various types of data leaks.
 
 #### [Final Presentation Slides](https://docs.google.com/presentation/d/1iaZ8GhRR3_XuDEBKmpN9eMPczE7oB9kNEpvQEyQxOuU/edit?usp=sharing)
+In our last presentation, we delved into the core objective of our project and explained how our solution directly addresses this issue. We also elaborated on the enhancements we made beyond our Minimum Viable Product (MVP) and the original conceptual framework, focusing on features like Multi-Client functionality and Encryption. Additionally, we presented an advanced version of our performance benchmarking, exploring the efficiency of operations like Put, Get, Clear, and Initialization compared to systems without PathORAM. Finally, we outlined the necessary steps for conducting a successful attack, highlighting both our current achievements and areas for future development.
 
 ## 9. References
 [1] Stefanov, Emil & van Dijk, Marten & Shi, Elaine & Fletcher, Christopher & Ren, Ling & Yu, Xiangyao & Devadas, Sahana. (2012). Path ORAM: an extremely simple oblivious RAM protocol. Proceedings of the ACM Conference on Computer and Communications Security. 10.1145/2508859.2516660. [Orginal Paper](https://people.csail.mit.edu/devadas/pubs/PathORam.pdf)
