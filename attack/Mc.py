@@ -18,7 +18,7 @@ cipher_data['Cipher_Words'] = cipher_data['Cipher_Words'].str.replace(r'\s*\'\s*
 # cipher_words = cipher_data['Cipher_Words'].str.split().explode().unique()
 # stemmed_cipher_words = [porter.stem(word) for word in cipher_words]
 
-# use the cipher words as they are for the coOccur-Matrix 
+# use the cipher words as they are for the coOccur-Matrix x
 cipher_words = cipher_data['Cipher_Words'].str.split().explode().unique()
 
 # CountVectorizer with the cipher words as vocabulary
