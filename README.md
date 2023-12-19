@@ -205,14 +205,13 @@ To test that our PathORAM has been implemented correctly, we will be creating a 
 3. Requests encrypted files
 4. Receives the documents that were able to be decrypted
 
-Within the attack architecture we will store the queries from the requests to FoundationDB along with matrix Mp and Mc. Matrix Mp and Mc contains the joint frequency distribution of plain and cipher keywords, these matrices allow us to reasonably guess the keyword pairs to the queries. To create these matrix we first will find a large publicly available dataset with all the possible keywords we would expect to find in our targeted attack. 
+Within the attack architecture we will store the queries from the requests to FoundationDB along with matrix Mp and Mc. Matrix Mp and Mc contains the joint frequency distribution of plain and cipher keywords, these matrices allow us to reasonably guess the keyword pairs to the queries. To create these matrix we first will find a large publicly available dataset with all the possible keywords we would expect to find in our targeted attack. Mp is created through using our spam_and_ham dataset in main.py in the attack folder, Mc is created through the same means but with the cypher text held in FDB.
 
 #### Anneal and Optimizer Functions:
 - This algorithm optimizes the keyword assignments to reveal queries by utilizing Simulated Annealing.
 - It iteratively modifies the keyword assignments based on the pair similarity matrices and known assignments to minimize the difference between joint frequency distributions of plain and cipher keyword pairs (Mp and Mc).
 - The process involves accepting or rejecting new states probabilistically, considering the energy difference and current temperature.
-- The loop continues until the temperature reaches zero or a threshold of unsuccessful rejections (rejectThreshold) is met.
-
+- The loop continues until the temperature reaches zero or a threshold of unsuccessful rejections (rejectThreshold) is met. This would be the best guess pairing of the two.
 
 ## 7. Release Planning
 1. Research and Data Storage R/W [09/27/23]
