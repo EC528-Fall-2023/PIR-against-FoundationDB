@@ -44,14 +44,17 @@ LEVELS=8 (default) sets how many levels the Path ORAM tree contains
 
 Your binaries will be located in `/path/to/repo/bin`
 
-Before running, make sure that you have a file called `.oram_enc` in your current working directory so that encryption works. In this file, you should have your 32 byte encryption key on the first line, and your 16 byte encryption initialization vector.
+Before running, make sure that you have a file called `.oram_enc` in your current working directory so that encryption works. In this file, you should have your 32 byte encryption key on the first line, and your 16 byte encryption initialization vector. There are some example applications that use both client libraries called `app_single_client` and `app_multiclient`. You can run those applications after starting up the server (and master\_client).
 
 If you would like to start over from before making your binaries, type:
 
+	make clear
+
+This command will reset FoundationDB to have nothing in it. Typing
+
 	make clean
 
-This command will reset FoundationDB to have nothing in it, and remove everything in the `bin` and `obj` folders.
-
+will remove everything in the `bin` and `obj` folders. Be mindful that your processes might still be running in the background, so you will have to kill those processes yourself.
 
 Happy hacking!
 

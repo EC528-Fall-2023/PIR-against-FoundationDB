@@ -26,21 +26,16 @@ test_startup()
 	done
 }
 
-test_other()
+test_without()
 {
-	rm -f .oram_state
 	make clean -s
-	SEED=1 BYTES="$1" BLOCKS="$2" LEVELS="$3" make "$program" -s
+	make without -s
 
-	taskset -c 0 $PWD/bin/server &
-	SERVER_PID=$!
+	for ((i = 1; i <= iterations; i++)); do
+		$PWD/bin/without -w austin=good
 
-	sleep 2
-
-	taskset -c 1 $PWD/bin/"$program" "$iterations" &
-
-	wait $!
-	wait $SERVER_PID
+		$PWD/bin/without -r austin
+	done
 }
 
 if [ "$program" == "startup" ]; then
@@ -67,7 +62,7 @@ if [ "$program" == "startup" ]; then
 	test_startup 1024 1 20
 
 	echo "end startup benchmark"
-else
+elif [ "$program" == "fdb" ]; then
 	# default parameters
 	echo "start default"
 	test_other 1024 1 8
@@ -96,6 +91,12 @@ else
 	test_other 1024 1 8
 
 	echo "end fdb benchmark"
+else
+	echo "start without"
+	
+	test_without
+
+	echo "end"
 fi
 
 

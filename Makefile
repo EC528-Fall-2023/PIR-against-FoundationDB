@@ -32,7 +32,7 @@ SRC := $(wildcard $(SRC_DIR)/*.cpp)
 OBJ := $(patsubst $(SRC_DIR)/%.cpp,$(OBJ_DIR)/%.o,$(SRC))
 INC := $(wildcard $(INC_DIR)/*.h)
 
-.PHONY: all server single_client multiclient bm startup fdb clear_fdb clean
+.PHONY: all server single_client multiclient bm startup fdb without clear_fdb clean clear
 
 all: single_client multiclient
 
@@ -60,6 +60,9 @@ startup: $(OBJ_DIR)/startup.o $(OBJ_DIR)/single_client.o $(OBJ_DIR)/block.o | $(
 fdb: $(OBJ_DIR)/fdb.o $(OBJ_DIR)/single_client.o $(OBJ_DIR)/block.o | $(BIN_DIR) server
 	$(CC) $^ $(LDLIBS) -o $(BIN_DIR)/$@
 
+without: $(OBJ_DIR)/without.o | $(BIN_DIR)
+	$(CC) $^ /lib64/libfdb_c.so $(LDLIBS) -o $(BIN_DIR)/$@
+
 clear_fdb: $(OBJ_DIR)/clear_fdb.o | $(BIN_DIR)
 	$(CC) $^ /lib64/libfdb_c.so $(LDLIBS) -o $(BIN_DIR)/$@
 
@@ -75,8 +78,11 @@ $(OBJ_DIR)/%.o: $(BMK_DIR)/%.cpp | $(OBJ_DIR)
 $(OBJ_DIR) $(BIN_DIR):
 	mkdir $@
 
-clean: clear_fdb
-	-sudo pkill -f $(PWD)/bin/server
-	-sudo pkill -f $(PWD)/bin/master_client
-	$(BIN_DIR)/clear_fdb
+clean:
+	#-sudo pkill -f $(PWD)/bin/server
+	#-sudo pkill -f $(PWD)/bin/master_client
 	rm -rf $(OBJ_DIR)/* $(BIN_DIR)/*
+
+clear: clear_fdb
+	$(BIN_DIR)/$<
+	rm -rf $(OBJ_DIR)/$<.o $(BIN_DIR)/$<

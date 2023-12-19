@@ -7,6 +7,8 @@
 #include <arpa/inet.h>
 #include <string>
 #include <fstream>
+#include <array>
+#include <chrono>
 
 #ifdef DEBUG
 	#include <error.h>
@@ -83,6 +85,7 @@ int main(int argc, char **argv)
 	}
 	printf("starting put\n");
 	for (int32_t i = 0; i < limit && std::getline(values, value); ++i) {
+	printf("starting put\n");
 		system("sync && echo 3 > /proc/sys/vm/drop_caches");
 
 		key = std::to_string(i);
